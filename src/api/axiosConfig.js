@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://patent-gap-backend.onrender.com/api',
   timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
