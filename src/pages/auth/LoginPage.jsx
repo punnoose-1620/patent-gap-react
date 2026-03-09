@@ -1,219 +1,343 @@
-import React, { useState } from 'react';
-import { useStore } from '../../hooks/useStore';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
-import HeroCarousel from '../../components/common/HeroCarousel';
-import { Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import logo from '../../assets/login.png';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import Navbar from '../../components/layout/Navbar'
+import Footer from '../../components/layout/Footer'
+import { useAuth } from '../../hooks/useAuth'
+import { useStore } from '../../hooks/useStore'
+import { Eye, EyeOff } from 'lucide-react'
 
+export default function LoginPage() {
+  const [form, setForm] = useState({ email: '', password: '' })
+  const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('Signing in...')
+  const navigate = useNavigate()
+  const { login } = useAuth()
+  const { auth } = useStore()
 
-const LoginPage = () => {
-  const navigate = useNavigate();
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      navigate('/dashboard')
+    }
+  }, [auth.isAuthenticated])
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { login, setPage } = useStore();
+  const handle = e => setForm({ ...form, [e.target.name]: e.target.value })
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  const submit = async e => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    setLoadingMessage('Signing in...')
+
+    const wakeTimer = setTimeout(() => {
+      setLoadingMessage('Waking up server, please wait...')
+    }, 5000)
 
     try {
-      const result = await login(email, password);
-      
+      const result = await login(form.email, form.password)
+      clearTimeout(wakeTimer)
       if (!result.success) {
-        setError(result.error || 'Login failed. Please try again.');
+        setError(result.error || 'Login failed. Please try again.')
       } else {
-      navigate('/dashboard'); // ✅ THIS is the missing piece
-    }
-  
+        navigate('/dashboard')
+      }
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
+      setError('An unexpected error occurred. Please try again.')
     } finally {
-      setLoading(false);
+      clearTimeout(wakeTimer)
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="bg-[#EDEADC] min-h-screen">
-      <HeroCarousel />
-      
-      <div className="flex items-center justify-center px-4 py-16">
-        <div className="w-full max-w-md">
-          {/* Main Login Card */}
-          <div className="bg-white/60 border-[1.5px] border-[#dcdab4]/45 rounded-3xl shadow-[0_12px_40px_rgba(25,25,112,0.15),0_4px_12px_rgba(25,25,112,0.1),inset_0_1px_1px_0_rgba(255,255,255,0.40)] backdrop-blur-md backdrop-saturate-120 overflow-hidden">
-            
-            {/* Decorative Header Background */}
-            <div 
-              className="relative px-8 pt-10 pb-8 text-center"
-              style={{
-                background: 'linear-gradient(135deg, #051146 0%, #191970 50%, #2e3a8c 100%)'
-              }}
-            >
-              <div className="absolute inset-0 opacity-10">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9A94D] rounded-full blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#4a5fa8] rounded-full blur-2xl"></div>
-              </div>
-              
-              <div className="relative z-10">
-                {/* Logo */}
-                <div className="mb-4">
-                  <img 
-                    src={logo} 
-                    alt="Patent Gap AI Logo" 
-                    className="max-w-30 h-auto mx-auto"
-                  />
-                </div>
-                
-                {/* Welcome Text */}
-                <h2 className="text-3xl font-bold text-white mb-2">Welcome Back</h2>
-                <p className="text-white/80">Sign in to your Patent Gap AI account</p>
-              </div>
-            </div>
+    <>
+      <Navbar />
+      <div className="page-layout">
 
-            {/* Form Content */}
-            <div className="px-8 py-8">
-              {/* Error Message */}
-              {error && (
-                <div className="mb-6 bg-red-50 border-l-4 border-red-500 rounded-lg p-4 flex items-start gap-3 animate-shake">
-                  <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                  <p className="text-red-700 text-sm">{error}</p>
+        {/* Page Hero */}
+        <div className="page-hero">
+          <div className="page-hero-inner">
+            <div className="eyebrow">Secure Access</div>
+            <h1 style={{
+              fontFamily: "'Libre Baskerville', serif",
+              fontSize: 'clamp(32px, 3.8vw, 50px)',
+              fontWeight: 400, color: 'var(--deep)',
+              lineHeight: 1.1, letterSpacing: '-0.025em', marginBottom: 20,
+            }}>
+              Sign in to{' '}
+              <em style={{ fontStyle: 'italic', color: 'var(--accent)' }}>Patent Gap AI</em>
+            </h1>
+            <p style={{
+              fontSize: 'clamp(15px, 1.5vw, 17px)', fontWeight: 300,
+              color: 'var(--ink2)', lineHeight: 1.8, maxWidth: 520,
+            }}>
+              Access your patent monitoring dashboard, claim-level analysis, and continuous infringement reports.
+            </p>
+            <div style={{ marginTop: 28, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              {['Claim-level analysis', 'Continuous monitoring', 'Attorney-reviewed findings'].map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+                  <span style={{
+                    fontFamily: "'Inconsolata', monospace", fontSize: 12,
+                    textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink2)',
+                  }}>{item}</span>
                 </div>
-              )}
-              
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {/* Email Input */}
-                <div>
-                  <label className="block text-sm font-semibold text-[#0A1F14] mb-2">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="your.email@example.com"
-                      className="w-full pl-10 pr-4 py-3 bg-white/80 border-2 border-[#dcdab4]/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#191970] focus:border-transparent transition-all duration-300 placeholder:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-                
-                {/* Password Input */}
-                <div>
-                  <label className="block text-sm font-semibold text-[#0A1F14] mb-2">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full pl-10 pr-12 py-3 bg-white/80 border-2 border-[#dcdab4]/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#191970] focus:border-transparent transition-all duration-300 placeholder:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      required
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
-                      disabled={loading}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Forgot Password Link */}
-                <div className="flex justify-end">
-                  <button 
-                    type="button"
-                    onClick={() => navigate('/forgot')}
-                    className="text-sm text-[#191970] hover:text-[#2e3a8c] font-semibold transition-colors"
-                    disabled={loading}
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-
-                {/* Login Button */}
-                <button
-                  type="submit"
-                  className="group w-full relative bg-[#C9A94D] text-[#0A1F14] px-8 py-3.5 rounded-xl font-bold uppercase tracking-wide text-sm shadow-[0_4px_18px_2px_rgba(201,169,77,0.3),0_2px_12px_2px_rgba(201,169,77,0.2),inset_0_0.5px_0.5px_0_rgba(255,255,220,0.19)] transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_8px_32px_4px_rgba(201,169,77,0.4),0_4px_20px_4px_rgba(201,169,77,0.3)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
-                  style={{
-                    backgroundImage: 'linear-gradient(180deg, #FFF8E2 0%, #C9A94D 38%, #B2923E 100%)'
-                  }}
-                  disabled={loading}
-                >
-                  <span className="relative z-10 flex items-center justify-center gap-2">
-                    {loading ? 'Logging in...' : 'Sign In'}
-                    {!loading && <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />}
-                  </span>
-                  
-                  {/* Button Shine Effect */}
-                  <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-                </button>
-
-                {/* Loading Spinner */}
-                {loading && (
-                  <div className="flex justify-center">
-                    <LoadingSpinner size="sm" message="Authenticating..." />
-                  </div>
-                )}
-              </form>
-
-              {/* Divider */}
-              <div className="relative my-8">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white text-gray-500">New to Patent Gap AI?</span>
-                </div>
-              </div>
-
-              {/* Register Link */}
-              <div className="text-center">
-                <button 
-                  type="button"
-                  onClick={() => navigate('/register')}
-                  className="inline-flex items-center gap-2 text-[#191970] hover:text-[#2e3a8c] font-semibold transition-colors group"
-                  disabled={loading}
-                >
-                  Create an Account
-                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
-                </button>
-              </div>
+              ))}
             </div>
           </div>
+        </div>
 
-          {/* Security Badge */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600 flex items-center justify-center gap-2">
-              <Lock className="h-4 w-4" />
-              Your information is secure and encrypted
-            </p>
+        {/* Form Section */}
+        <div className="page-form-section">
+          <div className="page-form-wrap">
+            <div className="form-grid">
+
+              {/* Login Card */}
+              <div className="form-card">
+                <h3 style={{
+                  fontFamily: "'Libre Baskerville', serif",
+                  fontSize: 20, color: 'var(--deep)', marginBottom: 6, fontWeight: 700,
+                }}>
+                  Welcome back
+                </h3>
+                <p style={{ fontSize: 13.5, color: 'var(--ink3)', marginBottom: 28 }}>
+                  Sign in to your account to continue.
+                </p>
+
+                {error && (
+                  <div style={{
+                    background: 'rgba(185,28,28,0.06)',
+                    border: '1px solid rgba(185,28,28,0.18)',
+                    borderLeft: '3px solid var(--red)',
+                    borderRadius: '0 6px 6px 0',
+                    padding: '12px 14px', marginBottom: 22,
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                  }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                      stroke="var(--red)" strokeWidth="2" strokeLinecap="round"
+                      strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="8" x2="12" y2="12"/>
+                      <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span style={{ fontSize: 13.5, color: 'var(--red)', lineHeight: 1.5 }}>{error}</span>
+                  </div>
+                )}
+
+                <form onSubmit={submit}>
+
+                  {/* Email */}
+                  <div className="form-group">
+                    <label className="form-label">Work Email *</label>
+                    <input
+                      className="form-input"
+                      type="email"
+                      name="email"
+                      placeholder="jane@firm.com"
+                      value={form.email}
+                      onChange={handle}
+                      required
+                      disabled={loading}
+                      autoComplete="email"
+                    />
+                  </div>
+
+                  {/* Password */}
+                  <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Password *</label>
+                      <a
+                        href="#"
+                        onClick={e => { e.preventDefault(); navigate('/forgot') }}
+                        style={{
+                          fontFamily: "'Inconsolata', monospace",
+                          fontSize: 11, textTransform: 'uppercase',
+                          letterSpacing: '0.08em', color: 'var(--accent)',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        Forgot password?
+                      </a>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        className="form-input"
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        placeholder="••••••••"
+                        value={form.password}
+                        onChange={handle}
+                        required
+                        disabled={loading}
+                        autoComplete="current-password"
+                        style={{ paddingRight: 40 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(v => !v)}
+                        disabled={loading}
+                        style={{
+                          position: 'absolute', right: 12, top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none', border: 'none',
+                          cursor: 'pointer', padding: 0,
+                          display: 'flex', alignItems: 'center',
+                          color: 'var(--ink3)',
+                        }}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Submit */}
+                  <button
+                    type="submit"
+                    className="btn-green"
+                    disabled={loading}
+                    style={{ width: '100%', justifyContent: 'center', opacity: loading ? 0.7 : 1 }}
+                  >
+                    {loading ? (
+                      <>
+                        {loadingMessage}
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                          style={{ animation: 'spin 1s linear infinite' }}>
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                        </svg>
+                      </>
+                    ) : (
+                      <>
+                        Sign In
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="5" y1="12" x2="19" y2="12"/>
+                          <polyline points="12 5 19 12 12 19"/>
+                        </svg>
+                      </>
+                    )}
+                  </button>
+
+                  <p style={{ fontSize: 12, color: 'var(--ink3)', textAlign: 'center', marginTop: 14, lineHeight: 1.6 }}>
+                    Don't have access yet?{' '}
+                    <Link to="/request-demo" style={{ color: 'var(--accent)' }}>
+                      Request a demo
+                    </Link>
+                  </p>
+
+                </form>
+
+                {/* Divider */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  margin: '28px 0 20px',
+                }}>
+                  <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+                  <span style={{
+                    fontFamily: "'Inconsolata', monospace", fontSize: 11,
+                    textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)',
+                  }}>
+                    Secure Access
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+                </div>
+
+                {/* Trust badges */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 24 }}>
+                  {['SOC 2 Ready', 'TLS Encrypted', 'Attorney-Grade'].map((badge, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{
+                        width: 5, height: 5, borderRadius: '50%',
+                        background: 'var(--accent)', opacity: 0.6,
+                      }} />
+                      <span style={{
+                        fontFamily: "'Inconsolata', monospace", fontSize: 10,
+                        textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink3)',
+                      }}>
+                        {badge}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+              </div>
+
+              {/* Info Side */}
+              <div>
+                <div className="eyebrow">Your Dashboard</div>
+                <h2 className="serif" style={{ fontSize: 'clamp(22px, 2.5vw, 34px)', marginBottom: 18 }}>
+                  Everything You Need for Patent <em>Enforcement</em>
+                </h2>
+                <p style={{ fontSize: 15, fontWeight: 300, color: 'var(--ink2)', lineHeight: 1.8, marginBottom: 36 }}>
+                  Your account gives you access to continuous monitoring, claim-level analysis, and structured findings ready for legal review.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {[
+                    { num: '01', title: 'Patent Portfolio Dashboard', desc: 'View all monitored patents with live infringement signals and risk scores at a glance.' },
+                    { num: '02', title: 'Claim-Level Analysis', desc: 'Drill into individual claims to see exactly where potential infringement is occurring.' },
+                    { num: '03', title: 'Structured Findings', desc: 'Attorney-ready reports with source citations, evidence chains, and export options.' },
+                    { num: '04', title: 'Continuous Alerts', desc: 'Get notified when new infringement signals are detected across your monitored portfolio.' },
+                  ].map((step, i) => (
+                    <div key={i} className="att-item" style={{ paddingLeft: 0 }}>
+                      <span className="att-num">{step.num}</span>
+                      <div>
+                        <h4 style={{ fontSize: 16, fontWeight: 600, color: 'var(--deep)', marginBottom: 4 }}>{step.title}</h4>
+                        <p style={{ fontSize: 14, fontWeight: 300, color: 'var(--ink2)', lineHeight: 1.65 }}>{step.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{
+                  marginTop: 36, background: 'var(--surf)',
+                  border: '1px solid var(--rule)', borderLeft: '3px solid var(--accent)',
+                  borderRadius: '0 8px 8px 0', padding: '18px 20px',
+                }}>
+                  <p style={{
+                    fontFamily: "'Libre Baskerville', serif", fontSize: 15,
+                    fontStyle: 'italic', color: 'var(--deep)', lineHeight: 1.65,
+                  }}>
+                    "Patent Gap AI gives us a live view of our entire portfolio's exposure. It's become an essential part of our enforcement workflow."
+                  </p>
+                  <p style={{
+                    fontFamily: "'Inconsolata', monospace", fontSize: 11,
+                    textTransform: 'uppercase', letterSpacing: '0.10em',
+                    color: 'var(--ink3)', marginTop: 10,
+                  }}>
+                    — Beta Partner, IP Litigation Firm
+                  </p>
+                </div>
+
+                <div style={{ marginTop: 24 }}>
+                  <p style={{ fontSize: 14, color: 'var(--ink3)', marginBottom: 12 }}>
+                    Don't have an account yet?
+                  </p>
+                  <Link to="/request-demo" className="btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    Request Early Access
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"/>
+                      <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                  </Link>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
 
-export default LoginPage;
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      <Footer />
+    </>
+  )
+}
