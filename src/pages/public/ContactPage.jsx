@@ -1,202 +1,161 @@
-import { Mail, Phone, MapPin, Send, Clock, Sparkles } from "lucide-react";
-import HeroCarousel from "../../components/common/HeroCarousel";
-import { useState } from "react";
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import Navbar from '../../components/layout/Navbar'
 
-const ContactPage = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    message: ''
-  });
+import Footer from '../../components/layout/Footer'
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log('Form submitted:', formData);
-    // Add your form submission logic here
-  };
+export default function ContactPage() {
+  const [form, setForm] = useState({ name: '', email: '', company: '', subject: '', message: '' })
+  const [submitted, setSubmitted] = useState(false)
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const handle = e => setForm({ ...form, [e.target.name]: e.target.value })
 
-  const contactInfo = [
-    {
-      icon: Mail,
-      title: 'Email',
-      details: 'contact@smarterpatent.com',
-      subtext: 'We\'ll respond within 24 hours',
-      gradient: 'from-[#C9A94D] to-[#E6C968]'
-    },
-    {
-      icon: Phone,
-      title: 'Phone',
-      details: '+1 (555) 123-4567',
-      subtext: 'Mon-Fri, 9AM-6PM EST',
-      gradient: 'from-[#191970] to-[#4a5fa8]'
-    },
-    {
-      icon: MapPin,
-      title: 'Address',
-      details: '123 Innovation Drive',
-      subtext: 'Tech Valley, CA 94000',
-      gradient: 'from-[#C9A94D] to-[#B2923E]'
-    },
-    {
-      icon: Clock,
-      title: 'Business Hours',
-      details: 'Monday - Friday',
-      subtext: '9:00 AM - 6:00 PM EST',
-      gradient: 'from-[#191970] to-[#2e3a8c]'
-    }
-  ];
+  const submit = e => {
+    e.preventDefault()
+    setSubmitted(true)
+  }
 
   return (
-    <div className="bg-[#EDEADC] min-h-screen">
-      <HeroCarousel />
-    
-      <div className="py-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          {/* Header Section */}
-          <div className="text-center mb-16">
-            <h1 className="text-5xl font-bold text-[#191970] mb-4">
-              Let's Start a Conversation
+    <>
+      <Navbar />
+      <div className="page-layout">
+
+        {/* Page Hero */}
+        <div className="page-hero">
+          <div className="page-hero-inner">
+            <div className="eyebrow">Get in Touch</div>
+            <h1 style={{ fontFamily: "'Libre Baskerville', serif", fontSize: 'clamp(32px, 3.8vw, 50px)', fontWeight: 400, color: 'var(--deep)', lineHeight: 1.1, letterSpacing: '-0.025em', marginBottom: 20 }}>
+              Contact <em style={{ fontStyle: 'italic', color: 'var(--accent)' }}>Us</em>
             </h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
+            <p style={{ fontSize: 'clamp(15px, 1.5vw, 17px)', fontWeight: 300, color: 'var(--ink2)', lineHeight: 1.8, maxWidth: 520 }}>
+              Whether you have questions about our platform, want to explore a partnership, or need more information about how Patent Gap AI can support your IP practice — we'd love to hear from you.
             </p>
           </div>
-          
-          {/* Main Content Grid */}
-          <div className="grid lg:grid-cols-3 gap-8 mb-12">
-            {/* Contact Information Cards - Left Column */}
-            <div className="lg:col-span-1 space-y-4">
-              {contactInfo.map((info, index) => {
-                const Icon = info.icon;
-                return (
-                  <div 
-                    key={index}
-                    className="group bg-white/40 border-[1.5px] border-[#dcdab4]/45 rounded-[15px] p-6 shadow-[0_8px_24px_0_rgba(25,25,112,0.09),0_1.5px_6px_0_rgba(25,25,112,0.12),inset_0_0.5px_0.5px_0_rgba(255,255,255,0.40)] backdrop-blur-sm backdrop-saturate-120 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_30px_rgba(0,0,0,0.15)]"
-                  >
-                    <div className="flex items-start gap-4">
-                      {/* Icon with Gradient Background */}
-                      <div className="relative">
-                        <div className={`absolute inset-0 bg-linear-to-br ${info.gradient} rounded-lg blur-md opacity-30 group-hover:opacity-50 transition-opacity duration-300`}></div>
-                        <div className={`relative bg-linear-to-br ${info.gradient} w-12 h-12 rounded-lg flex items-center justify-center shadow-md group-hover:scale-110 transition-transform duration-300`}>
-                          <Icon className="h-6 w-6 text-white" strokeWidth={1.5} />
-                        </div>
+        </div>
+
+        {/* Form Section */}
+        <div className="page-form-section">
+          <div className="page-form-wrap">
+            <div className="form-grid">
+
+              {/* Form Card */}
+              <div className="form-card">
+                {submitted ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'var(--acc-soft)', border: '1.5px solid var(--acc-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </div>
+                    <h3 style={{ fontFamily: "'Libre Baskerville', serif", fontSize: 22, color: 'var(--deep)', marginBottom: 12 }}>Message Sent</h3>
+                    <p style={{ fontSize: 15, color: 'var(--ink2)', fontWeight: 300, lineHeight: 1.7, marginBottom: 28 }}>Thank you for reaching out. We'll be in touch within 1–2 business days.</p>
+                    <button className="btn-green" onClick={() => setSubmitted(false)} style={{ fontSize: 14, padding: '10px 22px' }}>Send Another Message</button>
+                  </div>
+                ) : (
+                  <form onSubmit={submit}>
+                    <h3 style={{ fontFamily: "'Libre Baskerville', serif", fontSize: 20, color: 'var(--deep)', marginBottom: 28, fontWeight: 700 }}>Send a Message</h3>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label className="form-label">First Name</label>
+                        <input className="form-input" name="name" placeholder="Jane" value={form.name} onChange={handle} required />
                       </div>
-                      
-                      {/* Contact Details */}
-                      <div className="flex-1">
-                        <h3 className="font-bold text-[#0A1F14] mb-1">{info.title}</h3>
-                        <p className="text-[#191970] font-semibold text-sm mb-1">{info.details}</p>
-                        <p className="text-[#555] text-xs">{info.subtext}</p>
+                      <div className="form-group">
+                        <label className="form-label">Work Email</label>
+                        <input className="form-input" type="email" name="email" placeholder="jane@firm.com" value={form.email} onChange={handle} required />
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-
-              {/* Quick Info Box */}
-              <div className="bg-linear-to-br from-[#191970] via-[#2e3a8c] to-[#4a5fa8] rounded-[15px] p-6 text-white shadow-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="h-5 w-5 text-[#C9A94D]" />
-                  <h3 className="font-bold">Quick Response</h3>
-                </div>
-                <p className="text-white/90 text-sm leading-relaxed">
-                  Our dedicated team typically responds to inquiries within 24 hours during business days.
-                </p>
-              </div>
-            </div>
-
-            {/* Contact Form - Right Column */}
-            <div className="lg:col-span-2">
-              <div className="bg-white/60 border-[1.5px] border-[#dcdab4]/45 rounded-[20px] p-8 md:p-10 shadow-[0_12px_40px_rgba(25,25,112,0.12),0_4px_12px_rgba(25,25,112,0.08),inset_0_1px_1px_0_rgba(255,255,255,0.40)] backdrop-blur-md backdrop-saturate-120">
-                <div className="mb-8">
-                  <h2 className="text-3xl font-bold text-[#191970] mb-2">Send Us a Message</h2>
-                  <p className="text-gray-600">Fill out the form below and we'll get back to you shortly</p>
-                </div>
-                
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Name Input */}
-                  <div className="group">
-                    <label className="block text-sm font-semibold text-[#0A1F14] mb-2">
-                      Your Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      placeholder="John Doe"
-                      required
-                      className="w-full px-4 py-3 bg-white/80 border-2 border-[#dcdab4]/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#191970] focus:border-transparent transition-all duration-300 placeholder:text-gray-400"
-                    />
-                  </div>
-
-                  {/* Email Input */}
-                  <div className="group">
-                    <label className="block text-sm font-semibold text-[#0A1F14] mb-2">
-                      Email Address *
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="john@example.com"
-                      required
-                      className="w-full px-4 py-3 bg-white/80 border-2 border-[#dcdab4]/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#191970] focus:border-transparent transition-all duration-300 placeholder:text-gray-400"
-                    />
-                  </div>
-
-                  {/* Message Textarea */}
-                  <div className="group">
-                    <label className="block text-sm font-semibold text-[#0A1F14] mb-2">
-                      Your Message *
-                    </label>
-                    <textarea
-                      name="message"
-                      value={formData.message}
-                      onChange={handleChange}
-                      placeholder="Tell us about your patent protection needs..."
-                      rows="5"
-                      required
-                      className="w-full px-4 py-3 bg-white/80 border-2 border-[#dcdab4]/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#191970] focus:border-transparent transition-all duration-300 resize-none placeholder:text-gray-400"
-                    />
-                  </div>
-
-                  {/* Submit Button */}
-                  <button
-                    type="submit"
-                    className="group w-full relative bg-[#C9A94D] text-[#0A1F14] px-8 py-4 rounded-xl font-bold uppercase tracking-wide text-sm shadow-[0_4px_18px_2px_rgba(201,169,77,0.3),0_2px_12px_2px_rgba(201,169,77,0.2),inset_0_0.5px_0.5px_0_rgba(255,255,220,0.19)] transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_8px_32px_4px_rgba(201,169,77,0.4),0_4px_20px_4px_rgba(201,169,77,0.3)] active:scale-95 overflow-hidden"
-                    style={{
-                      backgroundImage: 'linear-gradient(180deg, #FFF8E2 0%, #C9A94D 38%, #B2923E 100%)'
-                    }}
-                  >
-                    <span className="relative z-10 flex items-center justify-center gap-2">
+                    <div className="form-group">
+                      <label className="form-label">Company / Firm</label>
+                      <input className="form-input" name="company" placeholder="Hartwell & Reid LLP" value={form.company} onChange={handle} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Subject</label>
+                      <select className="form-input" name="subject" value={form.subject} onChange={handle} required>
+                        <option value="" disabled>Select a topic</option>
+                        <option value="demo">Request a Demo</option>
+                        <option value="partnership">Partnership Inquiry</option>
+                        <option value="pricing">Pricing & Plans</option>
+                        <option value="technical">Technical Question</option>
+                        <option value="press">Press / Media</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Message</label>
+                      <textarea className="form-input" name="message" placeholder="Tell us about your patent portfolio and monitoring needs..." value={form.message} onChange={handle} required />
+                    </div>
+                    <button type="submit" className="btn-green" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}>
                       Send Message
-                      <Send className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
-                    </span>
-                    
-                    {/* Button Shine Effect */}
-                    <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-                  </button>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                      </svg>
+                    </button>
+                  </form>
+                )}
+              </div>
 
-                  <p className="text-xs text-gray-500 text-center mt-4">
-                    By submitting this form, you agree to our privacy policy and terms of service.
-                  </p>
-                </form>
+              {/* Info Side */}
+              <div>
+                <div className="eyebrow">Contact Details</div>
+                <h2 className="serif" style={{ fontSize: 'clamp(22px, 2.5vw, 34px)', marginBottom: 18 }}>We're Here to <em>Help</em></h2>
+                <p style={{ fontSize: 15, fontWeight: 300, color: 'var(--ink2)', lineHeight: 1.8, marginBottom: 36 }}>
+                  Our team includes patent attorneys, IP professionals, and engineers. We understand the nuance of your work.
+                </p>
+                <div className="info-list">
+                  <div className="info-item">
+                    <div className="info-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h4>Email</h4>
+                      <p>contact@patentgap.ai — we respond within 1–2 business days.</p>
+                    </div>
+                  </div>
+                  <div className="info-item">
+                    <div className="info-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h4>Offices</h4>
+                      <p>San Francisco, CA · Stockholm, Sweden. Available globally for remote engagements.</p>
+                    </div>
+                  </div>
+                  <div className="info-item">
+                    <div className="info-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h4>Request a Demo</h4>
+                      <p>Want to see the platform in action? <Link to="/request-demo" style={{ color: 'var(--accent)', fontWeight: 500 }}>Schedule a live demo</Link> with our team.</p>
+                    </div>
+                  </div>
+                  <div className="info-item">
+                    <div className="info-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h4>Response Time</h4>
+                      <p>We aim to respond to all inquiries within 1–2 business days. Urgent matters are typically addressed same-day.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-export default ContactPage;
+      <Footer />
+    </>
+  )
+}
