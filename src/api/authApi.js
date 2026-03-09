@@ -3,6 +3,7 @@ import axiosInstance from './axiosConfig';
 export const authApi = {
   login: async (email, password) => {
     try {
+      console.log('🔐 Attempting login with:', { email, password: '********' });
       const { data } = await axiosInstance.post('/login', { email, password });
        console.log('✅ Login success response:', data);  // ← add this
        if (!data.success) {
