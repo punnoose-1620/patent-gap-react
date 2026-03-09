@@ -3,14 +3,15 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import './index.css';
-import { StoreProvider } from './store/StoreProvider.jsx';
+import { Provider } from 'react-redux';        // ← changed
+import store from './store/index.js';           // ← changed
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <StoreProvider>
+    <Provider store={store}>                   {/* ← changed */}
       <BrowserRouter>
         <App />
       </BrowserRouter>
-    </StoreProvider>
+    </Provider>
   </React.StrictMode>
 );
