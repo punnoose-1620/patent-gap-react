@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Navbar from '../../components/layout/Navbar'
 import HeroSection from '../../components/layout/HeroSection'
 import Footer from '../../components/layout/Footer'
+import TestimonialsCarousel from './TestimonialsCarousel'
 
 function useReveal() {
   useEffect(() => {
@@ -221,46 +222,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ── */}
-      <section className="testimonials" id="testimonials">
-        <div className="section-wrap">
-          <div className="test-header reveal">
-            <div className="eyebrow">What Practitioners Say</div>
-            <h2 className="serif">Trusted by <em>IP Professionals</em></h2>
-          </div>
-          <div className="test-grid">
-            {[
-              {
-                initials: 'MR', name: 'Marcus Reid', role: 'Partner, IP Litigation · Hartwell & Reid LLP',
-                quote: 'Patent Gap AI fundamentally changed how we approach portfolio monitoring. What used to take weeks of manual review now surfaces as structured findings in hours. Our team can focus on analysis rather than searching.',
-              },
-              {
-                initials: 'SL', name: 'Sophia Lindqvist', role: 'Chief IP Counsel · Volaris Technologies',
-                quote: "The claim-level analysis is exceptional. It doesn't just flag patents — it maps each claim element to potential infringers with evidence we can actually use in licensing conversations. The depth is unlike anything else we've seen.",
-              },
-              {
-                initials: 'DJ', name: 'Daniel J. Okafor', role: 'Principal Patent Attorney · Okafor IP Group',
-                quote: "As a boutique IP firm, continuous monitoring was previously out of reach. Patent Gap AI gives us enterprise-grade intelligence without enterprise-grade overhead. It's levelled the playing field for our clients significantly.",
-              },
-            ].map((t, i) => (
-              <div key={i} className={`test-card reveal${i === 1 ? ' d1' : i === 2 ? ' d2' : ''}`}>
-                <div className="test-stars">
-                  {[...Array(5)].map((_, j) => <span key={j}>★</span>)}
-                </div>
-                <p className="test-quote">{t.quote}</p>
-                <div className="test-person">
-                  <div className="test-avatar">{t.initials}</div>
-                  <div>
-                    <div className="test-name">{t.name}</div>
-                    <div className="test-role">{t.role}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
+      
+<TestimonialsCarousel />
+      
       {/* ── CTA ── */}
       <section className="cta-section" id="cta">
         <div className="cta-inner">
