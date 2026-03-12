@@ -6,7 +6,7 @@ import Footer from '../../components/layout/Footer'
 export default function RequestDemoPage() {
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '',
-    company: '', role: '', portfolioSize: '', useCase: '', timeline: '',
+    company: '', role: '', portfolioSize: '', useCase: '', timeline: '', timezone: '',
   })
   const [submitted, setSubmitted] = useState(false)
 
@@ -130,6 +130,41 @@ export default function RequestDemoPage() {
                       </div>
                     </div>
 
+                    {/* Timezone — full width row */}
+                    <div className="form-group">
+                      <label className="form-label">Your Time Zone *</label>
+                      <select className="form-input" name="timezone" value={form.timezone} onChange={handle} required>
+                        <option value="" disabled>Select your time zone</option>
+                        <optgroup label="Americas">
+                          <option value="America/Los_Angeles">Pacific Time — US &amp; Canada (PT)</option>
+                          <option value="America/Denver">Mountain Time — US &amp; Canada (MT)</option>
+                          <option value="America/Chicago">Central Time — US &amp; Canada (CT)</option>
+                          <option value="America/New_York">Eastern Time — US &amp; Canada (ET)</option>
+                          <option value="America/Sao_Paulo">Brasília Time (BRT)</option>
+                          <option value="America/Toronto">Toronto (ET)</option>
+                          <option value="America/Vancouver">Vancouver (PT)</option>
+                        </optgroup>
+                        <optgroup label="Europe">
+                          <option value="Europe/London">London (GMT/BST)</option>
+                          <option value="Europe/Paris">Paris / Berlin / Amsterdam (CET)</option>
+                          <option value="Europe/Stockholm">Stockholm (CET)</option>
+                          <option value="Europe/Helsinki">Helsinki / Tallinn (EET)</option>
+                          <option value="Europe/Moscow">Moscow (MSK)</option>
+                        </optgroup>
+                        <optgroup label="Asia / Pacific">
+                          <option value="Asia/Dubai">Dubai (GST)</option>
+                          <option value="Asia/Kolkata">India (IST)</option>
+                          <option value="Asia/Singapore">Singapore / Kuala Lumpur (SGT)</option>
+                          <option value="Asia/Tokyo">Tokyo / Osaka (JST)</option>
+                          <option value="Asia/Seoul">Seoul (KST)</option>
+                          <option value="Asia/Shanghai">Beijing / Shanghai (CST)</option>
+                          <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
+                          <option value="Australia/Sydney">Sydney (AEST)</option>
+                          <option value="Pacific/Auckland">Auckland (NZST)</option>
+                        </optgroup>
+                      </select>
+                    </div>
+
                     <div className="form-group">
                       <label className="form-label">Primary Use Case</label>
                       <textarea
@@ -190,6 +225,7 @@ export default function RequestDemoPage() {
                   </p>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
