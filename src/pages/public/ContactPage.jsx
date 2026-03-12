@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Navbar from '../../components/layout/Navbar'
-
 import Footer from '../../components/layout/Footer'
 
 export default function ContactPage() {
@@ -149,6 +148,33 @@ export default function ContactPage() {
                       <p>We aim to respond to all inquiries within 1–2 business days. Urgent matters are typically addressed same-day.</p>
                     </div>
                   </div>
+
+                  {/* LinkedIn */}
+                  <div className="info-item">
+                    <div className="info-icon">
+                      {/* LinkedIn logo mark */}
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>
+                        <rect x="2" y="9" width="4" height="12"/>
+                        <circle cx="4" cy="4" r="2"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h4>LinkedIn</h4>
+                      <p>
+                        Follow us for updates, insights, and IP industry news.{' '}
+                        <a
+                          href="https://www.linkedin.com/company/patent-gap-ai"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--accent)', fontWeight: 500 }}
+                        >
+                          Patent Gap AI on LinkedIn
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             </div>
