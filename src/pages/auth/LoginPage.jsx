@@ -61,7 +61,7 @@ export default function LoginPage() {
             <div className="eyebrow">Secure Access</div>
             <h1 style={{
               fontFamily: "'Libre Baskerville', serif",
-              fontSize: 'clamp(32px, 3.8vw, 50px)',
+              fontSize: 'clamp(22px, 5vw, 50px)',
               fontWeight: 400, color: 'var(--deep)',
               lineHeight: 1.1, letterSpacing: '-0.025em', marginBottom: 20,
             }}>
