@@ -235,6 +235,7 @@ const PatentDetailPage = () => {
         } catch (e) { console.warn('Claims chart unavailable', e); }
       }
       setCaseData(c);
+      console.log('🗂️ Full caseData:', JSON.stringify(c, null, 2));
     } catch (err) {
       console.error('Error fetching case details:', err);
       setPageError(err?.message || 'Failed to load case');
