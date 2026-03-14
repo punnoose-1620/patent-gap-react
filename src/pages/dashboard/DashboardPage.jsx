@@ -5,13 +5,12 @@ import { useUI } from '../../hooks/useUI';
 import { usePatents } from '../../hooks/usePatents';
 import { useAuth } from '../../hooks/useAuth';
 import { RefreshCw } from 'lucide-react';
-import { Search, FileText, AlertTriangle, CheckCircle} from 'lucide-react';
+import { Search, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
 import StatCard from '../../components/dashboard/StatCard';
 import ProjectCard from '../../components/dashboard/ProjectCard';
 import ProjectModal from '../../components/dashboard/ProjectModal';
 import DashboardSidebar from '../../components/layout/DashboardSidebar';
 
-// ✅ Matches HTML getStatusShorthand()
 const getStatusShorthand = (status) => {
   status = String(status || '');
   if (status.includes('Expired')) return 'expired';
@@ -22,7 +21,6 @@ const getStatusShorthand = (status) => {
   return status.toLowerCase();
 };
 
-// ✅ Matches HTML formatTimeAgo()
 const formatTimeAgo = (dateString) => {
   if (!dateString) return 'Unknown';
   const date = new Date(dateString);
@@ -35,7 +33,6 @@ const formatTimeAgo = (dateString) => {
   return `${Math.floor(diffInSeconds / 604800)} weeks ago`;
 };
 
-// ✅ Matches HTML formatDate()
 const formatDate = (dateString) => {
   if (!dateString) return 'Unknown';
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -43,10 +40,18 @@ const formatDate = (dateString) => {
   });
 };
 
+// Maps each StatCard to the patent statuses it should show
+const STAT_STATUS_MAP = {
+  activeScans:      ['patented'],
+  patentsAnalyzed:  'all',                              // shows everything
+  highRiskMatches:  ['patented'],  // adjust to match your real statuses
+  clearedPatents:   ['complete', 'cleared', 'expired', 'abandoned'],
+};
+
 export default function DashboardPage() {
   const { patents, ui } = useStore();
   const { setPage } = useUI();
-  const { loadPatents, loadStats } = usePatents();
+  const { loadPatents, loadStats, filterPatents } = usePatents();
   const { logout } = useAuth();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -56,6 +61,10 @@ export default function DashboardPage() {
   const [alertDismissed, setAlertDismissed] = useState(false);
 
   const newPatent = { title: '', patentNumber: '' };
+
+  // Read filters from Redux
+  const searchQuery  = patents.filters.searchQuery;
+  const statusFilter = patents.filters.status; // 'all' | 'activeScans' | 'patentsAnalyzed' | 'highRiskMatches' | 'clearedPatents'
 
   useEffect(() => {
     handleLoadDashboard();
@@ -72,6 +81,12 @@ export default function DashboardPage() {
     setIsRefreshing(false);
   };
 
+  // Toggle stat card filter: clicking the active card resets to 'all'
+  const handleStatCardClick = (cardKey) => {
+    const next = statusFilter === cardKey ? 'all' : cardKey;
+    filterPatents({ status: next });
+  };
+
   const mappedPatents = patents.patents.map(p => ({
     id: p._id,
     title: p.title || p.name || 'Untitled Project',
@@ -86,6 +101,23 @@ export default function DashboardPage() {
     documentsCount: p.documentsCount,
     progress: p.progress || 0,
   }));
+  console.log('📋 All statuses:', mappedPatents.map(p => ({ title: p.title, status: p.status })));
+
+  // Step 1 — filter by status card selection
+  const statusFilteredPatents = (() => {
+    if (!statusFilter || statusFilter === 'all') return mappedPatents;
+    const allowed = STAT_STATUS_MAP[statusFilter];
+    if (!allowed || allowed === 'all') return mappedPatents;
+    return mappedPatents.filter(p => allowed.includes(p.status));
+  })();
+
+  // Step 2 — filter by search query on top of status filter
+  const filteredPatents = searchQuery.trim()
+    ? statusFilteredPatents.filter(p =>
+        p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.patentNumber.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : statusFilteredPatents;
 
   const activePatents = patents.patents.filter(p =>
     ['patented', 'active'].includes(getStatusShorthand(p.status))
@@ -93,6 +125,21 @@ export default function DashboardPage() {
   const closedPatents = patents.patents.filter(p =>
     ['expired', 'abandoned'].includes(getStatusShorthand(p.status))
   );
+
+  // Dynamic section title
+  const sectionTitle = (() => {
+    if (searchQuery.trim()) return `Results for "${searchQuery}"`;
+    if (statusFilter && statusFilter !== 'all') {
+      const labels = {
+        activeScans:     'Active Scans',
+        patentsAnalyzed: 'All Patents',
+        highRiskMatches: 'High Risk Patents',
+        clearedPatents:  'Cleared Patents',
+      };
+      return labels[statusFilter] || 'Active Patents';
+    }
+    return 'Active Patents';
+  })();
 
   return (
     <div className="dash-shell">
@@ -125,7 +172,20 @@ export default function DashboardPage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input placeholder="Search patents, findings..." />
+              <input
+                placeholder="Search patents, findings..."
+                value={searchQuery}
+                onChange={(e) => filterPatents({ searchQuery: e.target.value })}
+              />
+              {searchQuery && (
+                <button
+                  className="tn-search-clear"
+                  onClick={() => filterPatents({ searchQuery: '' })}
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              )}
             </div>
           </div>
 
@@ -185,6 +245,18 @@ export default function DashboardPage() {
               <h1 className="page-title">Patent <em>Monitoring</em></h1>
             </div>
             <div className="hd-actions">
+              {/* Show reset filter pill when a stat card is active */}
+              {statusFilter && statusFilter !== 'all' && (
+                <button
+                  className="btn-filter-reset"
+                  onClick={() => filterPatents({ status: 'all' })}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                  Clear filter
+                </button>
+              )}
               <button className="btn-export">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -203,7 +275,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ── Stats ── */}
+          {/* ── Stats — each card is clickable, active card highlighted ── */}
           <div className="stats-grid">
             <StatCard
               title="Active Scans"
@@ -211,6 +283,8 @@ export default function DashboardPage() {
               subtitle="This week"
               icon={<Search size={18} />}
               color="blue"
+              onClick={() => handleStatCardClick('activeScans')}
+              isActive={statusFilter === 'activeScans'}
             />
             <StatCard
               title="Patents Analyzed"
@@ -218,6 +292,8 @@ export default function DashboardPage() {
               subtitle="Total"
               icon={<FileText size={18} />}
               color="purple"
+              onClick={() => handleStatCardClick('patentsAnalyzed')}
+              isActive={statusFilter === 'patentsAnalyzed'}
             />
             <StatCard
               title="High Risk Matches"
@@ -225,6 +301,8 @@ export default function DashboardPage() {
               subtitle="Requires attention"
               icon={<AlertTriangle size={18} />}
               color="yellow"
+              onClick={() => handleStatCardClick('highRiskMatches')}
+              isActive={statusFilter === 'highRiskMatches'}
             />
             <StatCard
               title="Cleared Patents"
@@ -232,6 +310,8 @@ export default function DashboardPage() {
               subtitle="No infringement"
               icon={<CheckCircle size={18} />}
               color="green"
+              onClick={() => handleStatCardClick('clearedPatents')}
+              isActive={statusFilter === 'clearedPatents'}
             />
           </div>
 
@@ -248,14 +328,17 @@ export default function DashboardPage() {
                   <div className="live-dot" />
                   Live Monitoring
                 </div>
-                <div className="sec-title">Active Patents</div>
+                <div className="sec-title">{sectionTitle}</div>
               </div>
             </div>
             <div className="sec-hd-right">
               <button className="btn-refresh" onClick={handleRefresh} aria-label="Refresh">
                 <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
               </button>
-              <button className="btn-viewall">
+              <button
+                  className="btn-viewall"
+                  onClick={() => filterPatents({ status: 'all', searchQuery: '' })}
+                >
                 <span>View All</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="5" y1="12" x2="19" y2="12"/>
@@ -278,20 +361,40 @@ export default function DashboardPage() {
           )}
 
           {/* ── Empty state ── */}
-          {!ui.loading && mappedPatents.length === 0 && (
+          {!ui.loading && filteredPatents.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--ink3)' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
-              <p style={{ fontSize: 15 }}>No patents found. Add a patent to get started.</p>
-              <button className="btn-new" style={{ marginTop: 20 }} onClick={() => setIsModalOpen(true)}>
-                + Add Patent
-              </button>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>
+                {searchQuery.trim() ? '🔍' : statusFilter && statusFilter !== 'all' ? '🗂️' : '📭'}
+              </div>
+              {searchQuery.trim() ? (
+                <>
+                  <p style={{ fontSize: 15 }}>No patents match <strong>"{searchQuery}"</strong>.</p>
+                  <button className="btn-export" style={{ marginTop: 20 }} onClick={() => filterPatents({ searchQuery: '' })}>
+                    Clear search
+                  </button>
+                </>
+              ) : statusFilter && statusFilter !== 'all' ? (
+                <>
+                  <p style={{ fontSize: 15 }}>No patents in this category.</p>
+                  <button className="btn-export" style={{ marginTop: 20 }} onClick={() => filterPatents({ status: 'all' })}>
+                    Show all patents
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 15 }}>No patents found. Add a patent to get started.</p>
+                  <button className="btn-new" style={{ marginTop: 20 }} onClick={() => setIsModalOpen(true)}>
+                    + Add Patent
+                  </button>
+                </>
+              )}
             </div>
           )}
 
           {/* ── Patent Cards Grid ── */}
-          {!ui.loading && mappedPatents.length > 0 && (
+          {!ui.loading && filteredPatents.length > 0 && (
             <div className="patents-grid">
-              {mappedPatents.map((patent, index) => (
+              {filteredPatents.map((patent, index) => (
                 <div
                   key={patent.id}
                   className="animate-fadeInUp"
@@ -303,57 +406,57 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── Weekly Search Section ── */}
-          <div className="sec-hd" style={{ marginTop: 40 }}>
-            <div className="sec-hd-left">
-              <div className="sec-ico">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-              </div>
-              <div>
-                <div className="sec-eye">
-                  <div className="live-dot" />
-                  Automated Monitoring
+          {/* ── Weekly Search Section — hidden while searching or filtering ── */}
+          {!searchQuery.trim() && (!statusFilter || statusFilter === 'all') && (
+            <>
+              <div className="sec-hd" style={{ marginTop: 40 }}>
+                <div className="sec-hd-left">
+                  <div className="sec-ico">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8"/>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="sec-eye">
+                      <div className="live-dot" />
+                      Automated Monitoring
+                    </div>
+                    <div className="sec-title">Weekly Search Results</div>
+                  </div>
                 </div>
-                <div className="sec-title">Weekly Search Results</div>
               </div>
-            </div>
-          </div>
 
-          <div className="pcard patented weekly-card">
-            <div className="pcard-top">
-              <span className="pcard-badge patented">
-                <span className="pcard-dot" />
-                Active
-              </span>
-            </div>
-            <div className="pcard-title" style={{ fontSize: 15 }}>Automated VGR Monitoring</div>
-            <div className="pcard-num">
-              {patents.stats.lastScanDate
-                ? `Last scan: ${formatDate(patents.stats.lastScanDate)}`
-                : 'Last scan: Loading...'}
-            </div>
-            <p style={{ fontSize: 13, color: 'var(--ink2)', margin: '10px 0', lineHeight: 1.6, fontWeight: 300 }}>
-              Weekly automated scans monitor competitor filings and industry changes relevant to your portfolio.
-            </p>
-            <div className="pcard-foot">
-              <div className="pcard-live">
-                <div className="live-bars"><span /><span /><span /><span /></div>
-                {patents.stats.newResults || 0} new results
+              <div className="pcard patented weekly-card">
+                <div className="pcard-top">
+                  <span className="pcard-badge patented">
+                    <span className="pcard-dot" />
+                    Active
+                  </span>
+                </div>
+                <div className="pcard-title" style={{ fontSize: 15 }}>Automated VGR Monitoring</div>
+                <div className="pcard-num">
+                  {patents.stats.lastScanDate
+                    ? `Last scan: ${formatDate(patents.stats.lastScanDate)}`
+                    : 'Last scan: Loading...'}
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--ink2)', margin: '10px 0', lineHeight: 1.6, fontWeight: 300 }}>
+                  Weekly automated scans monitor competitor filings and industry changes relevant to your portfolio.
+                </p>
+                <div className="pcard-foot">
+                  <div className="pcard-live">
+                    <div className="live-bars"><span /><span /><span /><span /></div>
+                    {patents.stats.newResults || 0} new results
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </>
+          )}
 
         </div>
       </main>
 
       <style>{`
-        /* ────────────────────────────────────────
-           RESPONSIVE DASHBOARD — ALL BREAKPOINTS
-        ──────────────────────────────────────── */
-
         @keyframes spin {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
@@ -363,6 +466,42 @@ export default function DashboardPage() {
           to   { opacity: 1; transform: translateY(0); }
         }
         .animate-fadeInUp { animation: fadeInUp 0.6s ease-out forwards; }
+
+        /* ── Search clear button ── */
+        .tn-search { position: relative; display: flex; align-items: center; }
+        .tn-search-clear {
+          position: absolute;
+          right: 8px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 16px;
+          line-height: 1;
+          color: var(--ink3);
+          padding: 0 2px;
+          display: flex;
+          align-items: center;
+        }
+        .tn-search-clear:hover { color: var(--ink1); }
+
+        /* ── Clear filter pill ── */
+        .btn-filter-reset {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 5px 10px;
+          border-radius: 20px;
+          border: 1px solid var(--accent);
+          background: color-mix(in srgb, var(--accent) 10%, transparent);
+          color: var(--accent);
+          font-size: 12px;
+          cursor: pointer;
+          font-weight: 500;
+          transition: background 0.15s;
+        }
+        .btn-filter-reset:hover {
+          background: color-mix(in srgb, var(--accent) 20%, transparent);
+        }
 
         /* ── Stats grid ── */
         .stats-grid {
@@ -379,284 +518,127 @@ export default function DashboardPage() {
           gap: 20px;
         }
 
-        /* ── Weekly card max-width ── */
-        .weekly-card {
-          max-width: 100%;
-          width: 100%;
-        }
+        /* ── Weekly card ── */
+        .weekly-card { max-width: 100%; width: 100%; }
 
-        /* ── Top nav: hide search on small screens ── */
-        .tn-center { display: flex; }
-        .tn-sep    { display: block; }
-        .tn-sub    { display: block; }
-
-        /* ── Topnav label visibility ── */
+        /* ── Top nav defaults ── */
+        .tn-center    { display: flex; }
+        .tn-sep       { display: block; }
+        .tn-sub       { display: block; }
         .tn-btn-label { display: inline; }
-
-        /* ── btn-label in page header ── */
-        .btn-label { display: inline; }
-
-        /* ── Home button label ── */
+        .btn-label    { display: inline; }
         .tn-btn--home span { display: inline; }
 
-        /* ════════════════════════════════════════
-           LARGE DESKTOP  ≥ 1280px  (no changes)
-        ════════════════════════════════════════ */
-
-        /* ════════════════════════════════════════
-           MEDIUM DESKTOP  1024px – 1279px
-        ════════════════════════════════════════ */
+        /* ════ MEDIUM DESKTOP 1024–1279px ════ */
         @media (max-width: 1279px) {
-          .stats-grid {
-            gap: 16px;
-          }
+          .stats-grid { gap: 16px; }
           .patents-grid {
             grid-template-columns: repeat(2, 1fr);
             gap: 16px;
           }
         }
 
-        /* ════════════════════════════════════════
-           TABLET LANDSCAPE  768px – 1023px
-        ════════════════════════════════════════ */
+        /* ════ TABLET LANDSCAPE 768–1023px ════ */
         @media (max-width: 1023px) {
-          .dash-content {
-            padding: 20px 20px 40px !important;
-          }
-
-          /* Topnav: hide separator + "Dashboard" subtitle */
+          .dash-content { padding: 20px 20px 40px !important; }
           .tn-sep { display: none; }
           .tn-sub { display: none; }
-
-          /* Topnav: collapse search bar width */
-          .tn-search input {
-            width: 140px !important;
-          }
-
-          /* Stats: 2x2 grid */
+          .tn-search input { width: 140px !important; }
           .stats-grid {
             grid-template-columns: repeat(2, 1fr);
             gap: 14px;
             margin-bottom: 24px;
           }
-
-          /* Patents: 2 columns */
           .patents-grid {
             grid-template-columns: repeat(2, 1fr);
             gap: 14px;
           }
-
-          /* Page header stack */
           .page-hd {
             flex-direction: column !important;
             align-items: flex-start !important;
             gap: 12px !important;
           }
-
-          .page-title {
-            font-size: clamp(20px, 4vw, 28px) !important;
-          }
-
-          /* Sec header wrapping */
-          .sec-hd {
-            flex-wrap: wrap;
-            gap: 10px;
-          }
-
-          .weekly-card {
-            max-width: 100%;
-          }
+          .page-title { font-size: clamp(20px, 4vw, 28px) !important; }
+          .sec-hd { flex-wrap: wrap; gap: 10px; }
         }
 
-        /* ════════════════════════════════════════
-           TABLET PORTRAIT  600px – 767px
-        ════════════════════════════════════════ */
+        /* ════ TABLET PORTRAIT 600–767px ════ */
         @media (max-width: 767px) {
-          .topnav {
-            padding: 0 14px !important;
-            height: 52px !important;
-          }
-
-          /* Hide search entirely on tablet portrait */
+          .topnav { padding: 0 14px !important; height: 52px !important; }
           .tn-center { display: none; }
-
-          /* Hide home label, keep icon */
           .tn-btn--home span { display: none; }
-
-          /* Topnav title smaller */
-          .tn-title {
-            font-size: 13px !important;
-          }
-
-          /* Dash content */
-          .dash-content {
-            padding: 16px 16px 40px !important;
-          }
-
-          /* Alert responsive */
-          .alert {
-            padding: 10px 12px !important;
-            font-size: 13px !important;
-          }
-
-          /* Page header */
+          .tn-title { font-size: 13px !important; }
+          .dash-content { padding: 16px 16px 40px !important; }
+          .alert { padding: 10px 12px !important; font-size: 13px !important; }
           .page-hd {
             flex-direction: column !important;
             align-items: flex-start !important;
             gap: 10px !important;
             margin-bottom: 20px !important;
           }
-
-          .page-title {
-            font-size: 22px !important;
-          }
-
-          .hd-actions {
-            width: 100%;
-            justify-content: flex-end;
-          }
-
-          /* Stats: 2 cols */
+          .page-title { font-size: 22px !important; }
+          .hd-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
           .stats-grid {
             grid-template-columns: repeat(2, 1fr);
             gap: 10px;
             margin-bottom: 20px;
           }
-
-          /* Patents: 1 column */
-          .patents-grid {
-            grid-template-columns: 1fr;
-            gap: 12px;
-          }
-
-          /* Section header: wrap */
-          .sec-hd {
-            flex-wrap: wrap;
-            gap: 10px;
-          }
-
-          .sec-title {
-            font-size: 14px !important;
-          }
-
-          .weekly-card {
-            max-width: 100%;
-          }
+          .patents-grid { grid-template-columns: 1fr; gap: 12px; }
+          .sec-hd { flex-wrap: wrap; gap: 10px; }
+          .sec-title { font-size: 14px !important; }
         }
 
-        /* ════════════════════════════════════════
-           MOBILE  < 600px
-        ════════════════════════════════════════ */
+        /* ════ MOBILE < 600px ════ */
         @media (max-width: 599px) {
-          .topnav {
-            padding: 0 12px !important;
-            height: 50px !important;
-          }
-
-          /* Hide decorative topnav items */
-          .tn-center  { display: none; }
-          .tn-vsep    { display: none !important; }
+          .topnav { padding: 0 12px !important; height: 50px !important; }
+          .tn-center    { display: none; }
+          .tn-vsep      { display: none !important; }
           .tn-btn--home { display: none !important; }
           .tn-btn-label { display: none; }
-
-          /* Title */
           .tn-title { font-size: 12px !important; }
-
-          /* Logout: icon only */
           .tn-btn svg { width: 15px; height: 15px; }
-
-          /* Dash content narrower padding */
-          .dash-content {
-            padding: 14px 12px 40px !important;
-          }
-
-          /* Alert layout */
+          .dash-content { padding: 14px 12px 40px !important; }
           .alert {
             flex-wrap: wrap;
             padding: 10px 10px !important;
             gap: 8px !important;
           }
           .alert-body { font-size: 12px !important; flex: 1 1 0; min-width: 0; }
-
-          /* Page header */
           .page-hd {
             flex-direction: column !important;
             gap: 10px !important;
             margin-bottom: 18px !important;
           }
-
           .page-eyebrow { font-size: 10px !important; }
           .page-title   { font-size: 20px !important; }
-
-          .hd-actions {
-            width: 100%;
-            display: flex;
-            gap: 8px;
-          }
-
-          /* Hide export label, keep icon */
+          .hd-actions { width: 100%; display: flex; gap: 8px; flex-wrap: wrap; }
           .btn-label { display: none; }
-          .btn-export {
-            padding: 7px 10px !important;
-            min-width: unset !important;
-          }
-
-          .btn-new {
-            flex: 1;
-            justify-content: center !important;
-          }
-
-          /* Stats: 2 columns stacked, smaller */
+          .btn-export { padding: 7px 10px !important; min-width: unset !important; }
+          .btn-new { flex: 1; justify-content: center !important; }
           .stats-grid {
             grid-template-columns: repeat(2, 1fr);
             gap: 8px;
             margin-bottom: 18px;
           }
-
-          /* Patents: 1 column */
-          .patents-grid {
-            grid-template-columns: 1fr;
-            gap: 10px;
-          }
-
-          /* Section header */
+          .patents-grid { grid-template-columns: 1fr; gap: 10px; }
           .sec-hd {
             flex-direction: column;
             align-items: flex-start !important;
             gap: 10px;
             padding: 12px 0 !important;
           }
-
-          .sec-hd-right {
-            align-self: flex-end;
-          }
-
-          .sec-title { font-size: 13px !important; }
-          .sec-eye   { font-size: 9px !important; }
-
-          /* Weekly card */
-          .weekly-card { max-width: 100%; }
+          .sec-hd-right { align-self: flex-end; }
+          .sec-title  { font-size: 13px !important; }
+          .sec-eye    { font-size: 9px !important; }
           .pcard-title { font-size: 14px !important; }
         }
 
-        /* ════════════════════════════════════════
-           TINY MOBILE  < 380px
-        ════════════════════════════════════════ */
+        /* ════ TINY MOBILE < 380px ════ */
         @media (max-width: 379px) {
-          .stats-grid {
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-          }
-
+          .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
           .page-title { font-size: 18px !important; }
-
-          .dash-content {
-            padding: 12px 10px 32px !important;
-          }
-
-          .topnav {
-            padding: 0 10px !important;
-          }
+          .dash-content { padding: 12px 10px 32px !important; }
+          .topnav { padding: 0 10px !important; }
         }
       `}</style>
 
