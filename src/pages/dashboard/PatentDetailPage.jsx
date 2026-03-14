@@ -72,6 +72,55 @@ const getSourceName = (id = '') => {
   return 'Patent Gap';
 };
 
+// ─────────────────────────────────────────────────────────────
+// Normalise a raw infringement object into a consistent shape
+// regardless of whether it came from the patent or product format.
+//
+// Patent format  → has entry_id, entry_title, entry_url
+// Product format → has product_id, product_name, product_url
+// ─────────────────────────────────────────────────────────────
+const normaliseMatch = (m) => {
+  const isProduct = Boolean(m.product_id);
+
+  if (isProduct) {
+    // ── Product infringement (e.g. Amazon listing) ──
+    return {
+      type:          'product',
+      title:         m.product_name  || 'Untitled Product',
+      id:            m.product_id    || 'N/A',
+      url:           m.product_url   || null,
+      source:        m.source        || 'unknown',
+      score:         calculateOverlapScore(m.similar_claims),
+      badge:         calculateOverallRisk(m.similar_claims),
+      riskLevel:     calculateOverallRisk(m.similar_claims),
+      similarClaims: m.similar_claims || [],
+      // product-specific extras
+      claims:        m.claims        || [],
+      company:       null,
+      matchedClaims: null,
+      _entryId:      m.product_id,
+    };
+  } else {
+    // ── Patent infringement (e.g. freepatentsonline) ──
+    return {
+      type:          'patent',
+      title:         m.entry_title   || m.title || 'Untitled',
+      id:            m.entry_id      || m.patent || 'N/A',
+      url:           m.entry_url     || null,
+      source:        m.source        || 'unknown',
+      score:         calculateOverlapScore(m.similar_claims),
+      badge:         calculateOverallRisk(m.similar_claims),
+      riskLevel:     calculateOverallRisk(m.similar_claims),
+      similarClaims: m.similar_claims || [],
+      // patent-specific extras
+      claims:        [],
+      company:       m.company       || null,
+      matchedClaims: m.matchedClaims || null,
+      _entryId:      m.entry_id      || m.patent,
+    };
+  }
+};
+
 const StatusPill = ({ status }) => {
   const s   = String(status || '').toLowerCase();
   const cls = s === 'expired' ? 'expired' : s === 'abandoned' ? 'abandoned' : 'patented';
@@ -135,8 +184,6 @@ const PatentDetailPage = () => {
   const [selectedMatch,   setSelectedMatch]   = useState(null);
   const [sidebarOpen,     setSidebarOpen]     = useState(false);
   const [activeItem,      setActiveItem]      = useState('projects');
-
-  // ── NEW: track which document index is currently loading ──
   const [loadingDocIndex, setLoadingDocIndex] = useState(null);
 
   const title          = caseData?.title    || projectData.title        || 'Untitled Case';
@@ -163,21 +210,18 @@ const PatentDetailPage = () => {
         '5. A reporting module for generating comprehensive analysis reports.',
       ];
 
+  // ── Raw matches from API ──
   const realMatches = caseData?.infringements || [];
+  console.log('📋 Raw infringements from API:', realMatches);
+
+  // ── Normalise each match regardless of format ──
   const potentialMatches = realMatches.length > 0
-    ? realMatches.map(m => ({
-        title:         m.title || m.entry_title || 'Untitled',
-        id:            m.patent || m.entry_id || 'N/A',
-        score:         calculateOverlapScore(m.similar_claims),
-        badge:         calculateOverallRisk(m.similar_claims),
-        riskLevel:     calculateOverallRisk(m.similar_claims),
-        company:       m.company || null,
-        matchedClaims: m.matchedClaims || null,
-        _entryId:      m.entry_id || m.patent,
-      }))
-    : [
-        { title: 'No matches found', id: '', score: 0, badge: 'low', riskLevel: 'low', company: null, matchedClaims: null },
-      ];
+    ? realMatches.map(m => {
+        const normalised = normaliseMatch(m);
+        console.log(`🔍 [${normalised.type.toUpperCase()}] Normalised match:`, normalised);
+        return normalised;
+      })
+    : [{ title: 'No matches found', id: '', score: 0, badge: 'low', riskLevel: 'low', type: 'patent', similarClaims: [], claims: [], company: null, matchedClaims: null }];
 
   const fetchCaseDetails = useCallback(async () => {
     if (!caseId) { setPageLoading(false); return; }
@@ -201,33 +245,52 @@ const PatentDetailPage = () => {
 
   useEffect(() => { fetchCaseDetails(); }, [fetchCaseDetails]);
 
-  const beginSimilarityAnalysis = async () => {
-    setAnalysisLoading(true);
-    setAnalysisStatus('infringement');
-    try {
-      const analysisData  = await patentApi.getInfringementAnalysis(caseId);
-      const infringements = analysisData.similar_infringements || [];
-      const claims        = analysisData.claims || [];
+  
+const beginSimilarityAnalysis = async () => {
+  const keywords = caseData?.keywords;
+  const urls     = caseData?.documents?.map(d => d.url);
+  const context  = caseData?.context || caseData?.description || '';
 
-      await patentApi.updateCase(caseId, { infringements, claims });
+  console.log('🔍 Analysis payload:', { caseId, keywords, document_urls: urls, context });
 
-      let claimsChart = {};
-      if (claims.length > 0) {
-        try {
-          claimsChart = await patentApi.getInfringementChart(caseId) || {};
-        } catch (e) { console.warn('Claims chart unavailable', e); }
-      }
+  if (!keywords?.length || !urls?.length) {
+    alert('Cannot run analysis: missing keywords or documents.');
+    return;
+  }
 
-      setCaseData(prev => ({ ...prev, infringements, claims, claimsChart }));
-      dispatch(updatePatent({ _id: caseId, infringements, claims }));
-    } catch (err) {
-      console.error('Analysis failed:', err);
-      alert('Analysis failed: ' + (err?.message || 'Unknown error'));
-    } finally {
-      setAnalysisLoading(false);
-      setAnalysisStatus('idle');
+  setAnalysisLoading(true);
+  setAnalysisStatus('infringement');
+
+  try {
+    const analysisData  = await patentApi.getInfringementAnalysis(caseId, keywords, urls, context);
+    const infringements = analysisData.similar_infringements || [];
+    const claims        = analysisData.claims || [];
+
+    await patentApi.updateCase(caseId, { infringements, claims });
+
+    let claimsChart = {};
+    if (claims.length > 0) {
+      try {
+        claimsChart = await patentApi.getInfringementChart(caseId) || {};
+      } catch (e) { console.warn('Claims chart unavailable', e); }
     }
-  };
+
+    setCaseData(prev => ({ ...prev, infringements, claims, claimsChart }));
+    dispatch(updatePatent({ _id: caseId, infringements, claims }));
+
+  } catch (err) {
+    console.error('Analysis failed:', err);
+    const msg = err?.message || 'Unknown error';
+    const isRateLimit = msg.toLowerCase().includes('rate') || msg.includes('429');
+    alert(isRateLimit
+      ? 'Rate limit reached. Please contact support.'
+      : `Analysis failed: ${msg}`
+    );
+  } finally {
+    setAnalysisLoading(false);
+    setAnalysisStatus('idle');
+  }
+};
 
   const exportCase = () => alert(`Exporting case for ${title}`);
 
@@ -240,7 +303,6 @@ const PatentDetailPage = () => {
     } catch (err) { alert(`Error: ${err?.message}`); }
   };
 
-  // ── UPDATED: openDocument now accepts index and manages loadingDocIndex ──
   const openDocument = async (url, index) => {
     const fileName = url.split('/').pop();
     const fileType = url.endsWith('.pdf') ? 'application/pdf' : 'application/xml';
@@ -318,15 +380,6 @@ const PatentDetailPage = () => {
             <span className="tn-title">Patent Gap AI</span>
             <div className="tn-sep pd-tn-sep" />
             <span className="tn-sub pd-tn-sub">Patent Detail</span>
-          </div>
-
-          <div className="tn-center pd-tn-center">
-            <div className="tn-search">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input placeholder="Search patents, findings..." />
-            </div>
           </div>
 
           <div className="tn-right">
@@ -520,27 +573,16 @@ const PatentDetailPage = () => {
                     const src            = doc.source || '';
                     const bgImg          = src === 'uspto' ? 'uspto.jpg' : 'local.png';
                     const isLoadingThis  = loadingDocIndex === i;
-
                     return (
-                      <div
-                        key={i}
-                        onClick={() => !isLoadingThis && openDocument(url, i)}
-                        className="pd-doc-thumb"
-                      >
+                      <div key={i} onClick={() => !isLoadingThis && openDocument(url, i)} className="pd-doc-thumb">
                         <div
                           className="pd-doc-inner"
                           onMouseEnter={e => { if (!isLoadingThis) e.currentTarget.style.transform = 'translateY(-3px)'; }}
                           onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
                           style={{ cursor: isLoadingThis ? 'wait' : 'pointer' }}
                         >
-                          <img
-                            src={`/images/${bgImg}`}
-                            alt={src}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
+                          <img src={`/images/${bgImg}`} alt={src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           <div className="pd-doc-blur" />
-
-                          {/* ── Spinner overlay while loading ── */}
                           {isLoadingThis ? (
                             <div className="pd-doc-loader">
                               <div className="pd-doc-spinner" />
@@ -654,27 +696,68 @@ const PatentDetailPage = () => {
                   const isHigh         = match.riskLevel === 'high';
                   const isMedium       = match.riskLevel === 'medium';
                   const matchCardClass = isHigh ? 'expired' : isMedium ? 'abandoned' : 'patented';
+                  const isProduct      = match.type === 'product';
+
                   return (
-                    <div key={index} className={`pcard ${matchCardClass}`} onClick={() => setSelectedMatch(match)}>
+                    <div
+                      key={index}
+                      className={`pcard ${matchCardClass}`}
+                      onClick={() => {
+                        console.log(`🔍 Selected match [${match.type}]:`, match);
+                        setSelectedMatch(match);
+                      }}
+                    >
                       <div className="pcard-top">
                         <span className={`pcard-badge ${matchCardClass}`}>
                           <span className="pcard-dot" />
                           {typeof match.badge === 'string' ? match.badge.charAt(0).toUpperCase() + match.badge.slice(1) : match.badge} Risk
                         </span>
-                        <button className="card-ext" aria-label="Open" onClick={e => { e.stopPropagation(); setSelectedMatch(match); }}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                            <polyline points="15 3 21 3 21 9"/>
-                            <line x1="10" y1="14" x2="21" y2="3"/>
-                          </svg>
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {/* Type pill — shows PATENT or PRODUCT */}
+                          <span className="pd-type-pill" data-type={isProduct ? 'product' : 'patent'}>
+                            {isProduct ? '🛒 Product' : '📄 Patent'}
+                          </span>
+                          <button
+                            className="card-ext"
+                            aria-label="Open"
+                            onClick={e => {
+                              e.stopPropagation();
+                              console.log(`🔍 Selected match [${match.type}]:`, match);
+                              setSelectedMatch(match);
+                            }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                              <polyline points="15 3 21 3 21 9"/>
+                              <line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                          </button>
+                        </div>
                       </div>
+
                       <div className="pcard-title">{match.title}</div>
+
                       <div className="pcard-num">
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/></svg>
-                        {match.id}
+                        {/* Show product_id or entry_id clearly */}
+                        {isProduct ? `Product: ${match.id}` : `Patent: ${match.id}`}
                       </div>
-                      {match.company && <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8 }}>Company: {match.company}</div>}
+
+                      
+                      {/* Company (patent only) */}
+                      {match.company && (
+                        <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8 }}>
+                          Company: {match.company}
+                        </div>
+                      )}
+
+                      {/* Product claims preview (product only) */}
+                      {isProduct && match.claims?.length > 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8, fontStyle: 'italic' }}>
+                          "{match.claims[0].slice(0, 80)}…"
+                        </div>
+                      )}
+
                       <div className="pcard-progress">
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                           <span style={{ fontFamily: "'Inconsolata', monospace", fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)' }}>Overlap Score</span>
@@ -689,6 +772,8 @@ const PatentDetailPage = () => {
                           </div>
                         )}
                       </div>
+
+                      
                       <div className="pcard-foot">
                         <div className="pcard-time">
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -726,6 +811,27 @@ const PatentDetailPage = () => {
 
       <style>{`
         @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+        /* ── Type pill ── */
+        .pd-type-pill {
+          font-family: 'Inconsolata', monospace;
+          font-size: 9px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          padding: 2px 6px;
+          border-radius: 4px;
+          background: var(--surf2);
+          color: var(--ink3);
+        }
+        .pd-type-pill[data-type="product"] {
+          background: var(--amber-soft);
+          color: var(--amber, #b45309);
+        }
+        .pd-type-pill[data-type="patent"] {
+          background: var(--acc-soft);
+          color: var(--accent);
+        }
 
         /* ── Badges ── */
         .pd-badge {
@@ -822,11 +928,8 @@ const PatentDetailPage = () => {
         }
         .pd-doc-loader-text {
           font-family: 'Inconsolata', monospace;
-          font-size: 10px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.10em;
-          color: var(--ink3);
+          font-size: 10px; font-weight: 600;
+          text-transform: uppercase; letter-spacing: 0.10em; color: var(--ink3);
         }
 
         /* ── No-matches ── */
@@ -851,36 +954,18 @@ const PatentDetailPage = () => {
         ══════════════════════════════ */
         @media (max-width: 640px) {
           .dash-content { padding: 14px 14px 32px !important; }
-
-          /* Page header stacks vertically */
           .pd-page-hd { flex-direction: column !important; align-items: stretch !important; }
-          .pd-hd-actions {
-            display: flex; flex-wrap: wrap; gap: 8px; width: 100%;
-          }
+          .pd-hd-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
           .pd-hd-actions > * { flex: 1; justify-content: center; min-width: 80px; }
-
-          /* Card body tighter */
           .pd-card-body { padding: 14px 16px; }
-
-          /* Info row stacks */
           .pd-info-row { flex-direction: column; gap: 4px; }
           .pd-info-label-wrap { width: auto; }
-
-          /* Smaller doc thumbs */
           .pd-doc-inner { width: 6.5rem; height: 8.5rem; }
-
-          /* Match cards single column */
           .cards-grid { grid-template-columns: 1fr !important; }
-
-          /* Action buttons stack */
           .pd-action-btns { flex-direction: column; }
           .pd-action-btns .btn-export { width: 100%; justify-content: center; }
-
-          /* Topnav: icon-only buttons */
           .pd-tn-label { display: none; }
           .tn-title { font-size: 13px; }
-
-          /* Search bar hidden on very narrow */
           .pd-tn-center { display: none; }
         }
 
