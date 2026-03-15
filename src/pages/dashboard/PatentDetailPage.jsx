@@ -289,14 +289,37 @@ const claims = (caseData?.claims?.length > 0)
     dispatch(updatePatent({ _id: caseId, infringements, claims: newClaims }));
 
   } catch (err) {
-    console.error('Analysis failed:', err);
-    const msg = err?.message || 'Unknown error';
-    const isRateLimit = msg.toLowerCase().includes('rate') || msg.includes('429');
-    alert(isRateLimit
-      ? 'Rate limit reached. Please contact support.'
-      : `Analysis failed: ${msg}`
-    );
-  } finally {
+  console.error('Analysis failed:', err);
+
+  // ─── Detailed error breakdown ───────────────────────────────
+  if (err?.response) {
+    // Server responded with a non-2xx status
+    console.error('❌ Response error:', {
+      status:     err.response.status,
+      statusText: err.response.statusText,
+      data:       err.response.data,
+      headers:    err.response.headers,
+    });
+  } else if (err?.request) {
+    // Request was made but no response received (network error, CORS, timeout)
+    console.error('📡 No response received:', {
+      message:      err.message,       // e.g. "Network Error"
+      code:         err.code,          // e.g. "ERR_NETWORK", "ECONNABORTED"
+      url:          err.config?.url,
+      method:       err.config?.method,
+      baseURL:      err.config?.baseURL,
+      timeout:      err.config?.timeout,
+      requestData:  err.config?.data,
+    });
+  } else {
+    // Something went wrong setting up the request
+    console.error('⚙️ Request setup error:', err.message);
+  }
+
+  const msg        = err?.response?.data?.message || err?.message || 'Unknown error';
+  const isRateLimit = msg.toLowerCase().includes('rate') || msg.includes('429');
+  alert(isRateLimit ? 'Rate limit hit, please wait.' : `Analysis failed: ${msg}`);
+} finally {
     setAnalysisLoading(false);
     setAnalysisStatus('idle');
   }
