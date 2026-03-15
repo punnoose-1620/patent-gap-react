@@ -252,7 +252,10 @@ const beginSimilarityAnalysis = async () => {
   const urls     = caseData?.documents?.map(d => d.url) || [];
   const context  = caseData?.context        || caseData?.description || '';
   const country  = caseData?.countries?.[0] || 'US';
-  const claims   = caseData?.claims         || [];
+  // Pass actual claims — backend rejects empty array
+const claims = (caseData?.claims?.length > 0)
+  ? caseData.claims
+  : ['No claims available'];
   // owners = companies that own competing patents
   const owners = caseData?.inventors || caseData?.companies || [];
 
