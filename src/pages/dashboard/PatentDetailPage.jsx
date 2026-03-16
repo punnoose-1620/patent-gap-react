@@ -4,7 +4,7 @@
 // ===========================
 
 import { Clock, ArrowLeft, FileText, Calendar, User, Tag, Download, Trash2, RefreshCw } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { useAuth } from '../../hooks/useAuth';
@@ -117,6 +117,19 @@ const normaliseMatch = (m) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────
+// Derive a human-readable label for an in-progress analysis status
+// ─────────────────────────────────────────────────────────────
+const getAnalysisStatusLabel = (status) => {
+  const s = String(status || '').toLowerCase();
+  if (s === 'pending')     return 'Analysis pending…';
+  if (s === 'processing')  return 'Processing analysis…';
+  if (s === 'running')     return 'Running infringement analysis…';
+  if (s === 'queued')      return 'Analysis queued…';
+  if (s === 'in_progress') return 'Analysis in progress…';
+  return `Analysis status: ${status}`;
+};
+
 const StatusPill = ({ status }) => {
   const s   = String(status || '').toLowerCase();
   const cls = s === 'expired' ? 'expired' : s === 'abandoned' ? 'abandoned' : 'patented';
@@ -161,6 +174,99 @@ const SectionCard = ({ title, eyebrow, icon: Icon, children, actions }) => (
   </div>
 );
 
+// ─────────────────────────────────────────────────────────────
+// MatchCard — reused in both the "previous results" strip and
+// the normal completed-results grid.
+// ─────────────────────────────────────────────────────────────
+const MatchCard = ({ match, updatedAt, onSelect }) => {
+  const isHigh         = match.riskLevel === 'high';
+  const isMedium       = match.riskLevel === 'medium';
+  const matchCardClass = isHigh ? 'expired' : isMedium ? 'abandoned' : 'patented';
+  const isProduct      = match.type === 'product';
+
+  return (
+    <div
+      className={`pcard ${matchCardClass}`}
+      onClick={() => {
+        console.log(`🔍 Selected match [${match.type}]:`, match);
+        onSelect(match);
+      }}
+    >
+      <div className="pcard-top">
+        <span className={`pcard-badge ${matchCardClass}`}>
+          <span className="pcard-dot" />
+          {typeof match.badge === 'string' ? match.badge.charAt(0).toUpperCase() + match.badge.slice(1) : match.badge} Risk
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="pd-type-pill" data-type={isProduct ? 'product' : 'patent'}>
+            {isProduct ? '🛒 Product' : '📄 Patent'}
+          </span>
+          <button
+            className="card-ext"
+            aria-label="Open"
+            onClick={e => {
+              e.stopPropagation();
+              console.log(`🔍 Selected match [${match.type}]:`, match);
+              onSelect(match);
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div className="pcard-title">{match.title}</div>
+
+      <div className="pcard-num">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/></svg>
+        {isProduct ? `Product: ${match.id}` : `Patent: ${match.id}`}
+      </div>
+
+      {match.company && (
+        <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8 }}>
+          Company: {match.company}
+        </div>
+      )}
+
+      {isProduct && match.claims?.length > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8, fontStyle: 'italic' }}>
+          "{match.claims[0].slice(0, 80)}…"
+        </div>
+      )}
+
+      <div className="pcard-progress">
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ fontFamily: "'Inconsolata', monospace", fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)' }}>Overlap Score</span>
+          <span style={{ fontFamily: "'Libre Baskerville', serif", fontSize: 14, fontWeight: 700, color: isHigh ? 'var(--red)' : isMedium ? 'var(--amber)' : 'var(--accent)' }}>{match.score}%</span>
+        </div>
+        <div className="prog-track">
+          <div className={`prog-fill ${isHigh ? 'red' : isMedium ? 'grey' : 'green'}`} style={{ width: `${match.score}%` }} />
+        </div>
+        {match.matchedClaims && (
+          <div style={{ fontSize: 10, color: 'var(--ink3)', marginTop: 5, fontFamily: "'Inconsolata', monospace" }}>
+            Claims: {match.matchedClaims.join(', ')}
+          </div>
+        )}
+      </div>
+
+      <div className="pcard-foot">
+        <div className="pcard-time">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          {updatedAt}
+        </div>
+        <div className="pcard-live">
+          <div className="live-bars"><span /><span /><span /><span /></div>
+          Live
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PatentDetailPage = () => {
   const location = useLocation();
   const navigate  = useNavigate();
@@ -182,6 +288,9 @@ const PatentDetailPage = () => {
   const [activeItem,      setActiveItem]      = useState('projects');
   const [loadingDocIndex, setLoadingDocIndex] = useState(null);
 
+  // ── Ref for the background polling interval ──
+  const pollIntervalRef = useRef(null);
+
   const title          = caseData?.title    || projectData.title        || 'Untitled Case';
   const patentNumber   = caseData?.patentId || projectData.patentNumber || caseData?._id?.split('_')[1] || 'N/A';
   const status         = getStatusShorthand(caseData?.status || projectData.status || 'draft');
@@ -194,6 +303,7 @@ const PatentDetailPage = () => {
   const documentsCount = caseData?.documents?.length || projectData.documentsCount || 1;
   const isProcessing   = (caseData?.status || '').toLowerCase().includes('processing');
   const claimsChart    = caseData?.claimsChart || {};
+  const infringementAnalysisStatus = caseData?.infringementAnalysisStatus || 'unknown';
 
   // ── Only show real claims from the API — no hardcoded placeholders ──
   const displayClaims = caseData?.claims || [];
@@ -211,36 +321,112 @@ const PatentDetailPage = () => {
       })
     : [];
 
-  // ── Always fetch chart on load (not only when claims exist) ──
+  // ─────────────────────────────────────────────────────────────
+  // Determine what the Potential Matches section should render:
+  //
+  //  1. If infringementAnalysisStatus === 'completed'
+  //     → show realMatches (or "no matches" empty state)
+  //
+  //  2. If infringementAnalysisStatus === 'unknown' | 'None' | null | ''
+  //     → fall back: show realMatches if any exist, else show empty state
+  //
+  //  3. Any other status (pending / processing / running / queued …)
+  //     → show a status loader — analysis is in flight
+  // ─────────────────────────────────────────────────────────────
+  const iaStatus      = String(infringementAnalysisStatus || '').toLowerCase();
+  const iaIsCompleted = iaStatus === 'completed';
+  const iaIsUnknown   = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
+  const iaIsInFlight  = !iaIsCompleted && !iaIsUnknown; // pending / processing / running / queued …
+
+  // Should we render the match cards?
+  const shouldShowMatches =
+    (iaIsCompleted && realMatches.length > 0) ||
+    (iaIsUnknown   && realMatches.length > 0);
+
+  // Should we render the "no matches" empty state?
+  const shouldShowEmpty =
+    (iaIsCompleted && realMatches.length === 0) ||
+    (iaIsUnknown   && realMatches.length === 0);
+
+  // ── Shared helper: fetch case + chart, return the merged object ──
+  const loadCase = useCallback(async () => {
+    const c = await patentApi.getCaseById(caseId);
+    try {
+      const chart = await patentApi.getInfringementChart(caseId);
+      if (chart && Object.keys(chart).length > 0) c.claimsChart = chart;
+    } catch (e) { console.warn('Claims chart unavailable', e); }
+    return c;
+  }, [caseId]);
+
+  // ── Initial load (shows full-page spinner) ──
   const fetchCaseDetails = useCallback(async () => {
     if (!caseId) { setPageLoading(false); return; }
     try {
       setPageLoading(true);
-      const c = await patentApi.getCaseById(caseId);
-
-      // Always try to fetch chart regardless of whether claims exist
-      try {
-        const chart = await patentApi.getInfringementChart(caseId);
-        if (chart && Object.keys(chart).length > 0) c.claimsChart = chart;
-      } catch (e) { console.warn('Claims chart unavailable', e); }
-
+      const c = await loadCase();
       setCaseData(c);
 
-      // ─── Print full caseData ───────────────────────────────────
       console.log('🗂️ caseData keys:', Object.keys(c));
       console.log('🗂️ caseData.claims:', c?.claims);
       console.log('🗂️ caseData.infringements:', c?.infringements);
       console.log('🗂️ caseData.documents:', c?.documents);
+      console.log('🗂️ caseData.infringementAnalysisStatus:', c?.infringementAnalysisStatus);
       console.log('🗂️ FULL caseData:', JSON.stringify(c, null, 2));
-      // ──────────────────────────────────────────────────────────
-
     } catch (err) {
       console.error('Error fetching case details:', err);
       setPageError(err?.message || 'Failed to load case');
     } finally {
       setPageLoading(false);
     }
-  }, [caseId]);
+  }, [caseId, loadCase]);
+
+  // ── Silent background poll (no page-level spinner) ──
+  const pollCaseDetails = useCallback(async () => {
+    if (!caseId) return;
+    try {
+      const c = await loadCase();
+      console.log('🔄 Poll — infringementAnalysisStatus:', c?.infringementAnalysisStatus);
+      setCaseData(c);
+
+      // Stop polling once the backend reports 'completed'
+      const polledStatus = String(c?.infringementAnalysisStatus || '').toLowerCase();
+      if (polledStatus === 'completed') {
+        console.log('✅ Poll: analysis completed — stopping interval');
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    } catch (err) {
+      console.warn('Poll error (non-fatal):', err?.message);
+    }
+  }, [caseId, loadCase]);
+
+  // ── Start / stop the 2-minute polling interval ──
+  // Polling runs whenever:
+  //   • the user triggers a manual analysis (analysisLoading === true), OR
+  //   • the backend status is still in-flight on page load (iaIsInFlight)
+  // It stops as soon as the status becomes 'completed'.
+  useEffect(() => {
+    const shouldPoll = analysisLoading || iaIsInFlight;
+
+    if (shouldPoll && !pollIntervalRef.current) {
+      console.log('⏱️ Starting 2-min background poll');
+      pollIntervalRef.current = setInterval(pollCaseDetails, 2 * 60 * 1000);
+    }
+
+    if (!shouldPoll && pollIntervalRef.current) {
+      console.log('🛑 Stopping background poll (no longer needed)');
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [analysisLoading, iaIsInFlight, pollCaseDetails]);
 
   useEffect(() => { fetchCaseDetails(); }, [fetchCaseDetails]);
 
@@ -674,7 +860,7 @@ const PatentDetailPage = () => {
               <div className="sec-hd-left">
                 <div className="sec-ico">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0-3.42 0z"/>
                     <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                   </svg>
                 </div>
@@ -693,16 +879,63 @@ const PatentDetailPage = () => {
               </div>
             </div>
 
+            {/* ── CASE 1: manual analysis triggered by the user is running ── */}
             {analysisLoading && (
-              <div className="pd-card-body" style={{ textAlign: 'center', padding: '40px 24px' }}>
-                <div style={{ width: 36, height: 36, border: '3px solid var(--rule2)', borderTop: '3px solid var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
-                <p style={{ fontSize: 13, color: 'var(--ink3)' }}>
-                  {analysisStatus === 'claims' ? 'Isolating Claims…' : analysisStatus === 'infringement' ? 'Finding Infringements…' : 'Processing…'}
-                </p>
+              <>
+                <div className="pd-card-body" style={{ textAlign: 'center', padding: '40px 24px', marginBottom: potentialMatches.length > 0 ? 16 : 0 }}>
+                  <div style={{ width: 36, height: 36, border: '3px solid var(--rule2)', borderTop: '3px solid var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+                  <p style={{ fontSize: 13, color: 'var(--ink3)', margin: '0 0 4px' }}>
+                    {analysisStatus === 'claims' ? 'Isolating Claims…' : analysisStatus === 'infringement' ? 'Finding Infringements…' : 'Processing…'}
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--ink3)', fontFamily: "'Inconsolata', monospace", textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                    Background refresh every 2 min
+                  </p>
+                </div>
+
+                {/* Show any already-existing matches while the new analysis runs */}
+                {potentialMatches.length > 0 && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <div style={{ height: 1, flex: 1, background: 'var(--rule2)' }} />
+                      <span style={{ fontFamily: "'Inconsolata', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)', flexShrink: 0 }}>
+                        Previous results
+                      </span>
+                      <div style={{ height: 1, flex: 1, background: 'var(--rule2)' }} />
+                    </div>
+                    <div className="cards-grid">
+                      {potentialMatches.map((match, index) => (
+                        <MatchCard
+                          key={index}
+                          match={match}
+                          updatedAt={updatedAt}
+                          onSelect={setSelectedMatch}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ── CASE 2: page just loaded & infringement_analysis_status is in-flight ── */}
+            {!analysisLoading && iaIsInFlight && (
+              <div className="pd-card-body pd-ia-status-loader">
+                <div className="pd-ia-spinner-wrap">
+                  <div style={{ width: 36, height: 36, border: '3px solid var(--rule2)', borderTop: '3px solid var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+                  <div>
+                    <p className="pd-ia-status-title">Analysis in progress</p>
+                    <p className="pd-ia-status-sub">{getAnalysisStatusLabel(infringementAnalysisStatus)}</p>
+                  </div>
+                </div>
+                <div className="pd-ia-status-pill">
+                  <span className="pd-ia-dot" />
+                  {infringementAnalysisStatus}
+                </div>
               </div>
             )}
 
-            {!analysisLoading && !isProcessing && realMatches.length === 0 && (
+            {/* ── CASE 3: completed / unknown + no matches ── */}
+            {!analysisLoading && !iaIsInFlight && shouldShowEmpty && (
               <div className="pd-card-body pd-no-matches">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 20 }}>✅</span>
@@ -712,97 +945,17 @@ const PatentDetailPage = () => {
               </div>
             )}
 
-            {!analysisLoading && potentialMatches.length > 0 && realMatches.length > 0 && (
+            {/* ── CASE 4: completed / unknown + matches exist ── */}
+            {!analysisLoading && !iaIsInFlight && shouldShowMatches && (
               <div className="cards-grid">
-                {potentialMatches.map((match, index) => {
-                  const isHigh         = match.riskLevel === 'high';
-                  const isMedium       = match.riskLevel === 'medium';
-                  const matchCardClass = isHigh ? 'expired' : isMedium ? 'abandoned' : 'patented';
-                  const isProduct      = match.type === 'product';
-
-                  return (
-                    <div
-                      key={index}
-                      className={`pcard ${matchCardClass}`}
-                      onClick={() => {
-                        console.log(`🔍 Selected match [${match.type}]:`, match);
-                        setSelectedMatch(match);
-                      }}
-                    >
-                      <div className="pcard-top">
-                        <span className={`pcard-badge ${matchCardClass}`}>
-                          <span className="pcard-dot" />
-                          {typeof match.badge === 'string' ? match.badge.charAt(0).toUpperCase() + match.badge.slice(1) : match.badge} Risk
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span className="pd-type-pill" data-type={isProduct ? 'product' : 'patent'}>
-                            {isProduct ? '🛒 Product' : '📄 Patent'}
-                          </span>
-                          <button
-                            className="card-ext"
-                            aria-label="Open"
-                            onClick={e => {
-                              e.stopPropagation();
-                              console.log(`🔍 Selected match [${match.type}]:`, match);
-                              setSelectedMatch(match);
-                            }}
-                          >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                              <polyline points="15 3 21 3 21 9"/>
-                              <line x1="10" y1="14" x2="21" y2="3"/>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="pcard-title">{match.title}</div>
-
-                      <div className="pcard-num">
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/></svg>
-                        {isProduct ? `Product: ${match.id}` : `Patent: ${match.id}`}
-                      </div>
-
-                      {match.company && (
-                        <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8 }}>
-                          Company: {match.company}
-                        </div>
-                      )}
-
-                      {isProduct && match.claims?.length > 0 && (
-                        <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8, fontStyle: 'italic' }}>
-                          "{match.claims[0].slice(0, 80)}…"
-                        </div>
-                      )}
-
-                      <div className="pcard-progress">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontFamily: "'Inconsolata', monospace", fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)' }}>Overlap Score</span>
-                          <span style={{ fontFamily: "'Libre Baskerville', serif", fontSize: 14, fontWeight: 700, color: isHigh ? 'var(--red)' : isMedium ? 'var(--amber)' : 'var(--accent)' }}>{match.score}%</span>
-                        </div>
-                        <div className="prog-track">
-                          <div className={`prog-fill ${isHigh ? 'red' : isMedium ? 'grey' : 'green'}`} style={{ width: `${match.score}%` }} />
-                        </div>
-                        {match.matchedClaims && (
-                          <div style={{ fontSize: 10, color: 'var(--ink3)', marginTop: 5, fontFamily: "'Inconsolata', monospace" }}>
-                            Claims: {match.matchedClaims.join(', ')}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="pcard-foot">
-                        <div className="pcard-time">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                          {updatedAt}
-                        </div>
-                        <div className="pcard-live">
-                          <div className="live-bars"><span /><span /><span /><span /></div>
-                          Live
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {potentialMatches.map((match, index) => (
+                  <MatchCard
+                    key={index}
+                    match={match}
+                    updatedAt={updatedAt}
+                    onSelect={setSelectedMatch}
+                  />
+                ))}
               </div>
             )}
 
@@ -954,6 +1107,60 @@ const PatentDetailPage = () => {
           gap: 12px; flex-wrap: wrap;
         }
 
+        /* ── In-flight analysis status loader ── */
+        .pd-ia-status-loader {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+          padding: 24px !important;
+        }
+        .pd-ia-spinner-wrap {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+        .pd-ia-status-title {
+          font-size: 13.5px;
+          font-weight: 600;
+          color: var(--ink);
+          margin: 0 0 3px;
+        }
+        .pd-ia-status-sub {
+          font-family: 'Inconsolata', monospace;
+          font-size: 11px;
+          color: var(--ink3);
+          margin: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .pd-ia-status-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-family: 'Inconsolata', monospace;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.10em;
+          padding: 4px 10px;
+          border-radius: 5px;
+          background: var(--amber-soft, rgba(251,191,36,0.12));
+          color: var(--amber, #b45309);
+          flex-shrink: 0;
+        }
+        .pd-ia-dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: var(--amber, #b45309);
+          animation: ia-pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes ia-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.4; transform: scale(0.75); }
+        }
+
         /* ── Action buttons ── */
         .pd-action-btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 
@@ -983,6 +1190,7 @@ const PatentDetailPage = () => {
           .pd-tn-label { display: none; }
           .tn-title { font-size: 13px; }
           .pd-tn-center { display: none; }
+          .pd-ia-status-loader { flex-direction: column; align-items: flex-start; }
         }
 
         /* ══════════════════════════════
