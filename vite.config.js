@@ -15,7 +15,7 @@ export default defineConfig({
     }
   },
   preview: {
-    allowedHosts: ['patent-gap-ui.onrender.com'],
+    allowedHosts: true,
   }
 });
 
