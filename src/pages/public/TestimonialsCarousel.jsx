@@ -3,59 +3,65 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 const TESTIMONIALS = [
   {
     initials: 'FK', name: 'Firat Koseoglu',
+    image: '/images/testimonials/firat.jpg',
     role: 'Patent Engineer', firm: 'Patent Engineer',
     tag: 'Patent Engineer',
     quote: "Patent Gap AI transforms static patent portfolios into continuously monitored sources of evidence-backed infringement leads.",
   },
   {
-    initials: 'RL', name: 'Rachel Lim',
-    role: 'Chief IP Counsel', firm: 'Nexora Technologies',
-    tag: 'Licensing Strategy',
-    quote: "Patent Gap AI has completely transformed how we approach licensing negotiations. What used to take our team weeks of manual claim mapping now happens in hours, giving us the leverage and confidence to negotiate from a position of strength.",
+    initials: 'BL', name: 'Brent Lindon',
+    image: '',
+    role: 'Patent Attorney', firm: 'Patent Drafters',
+    tag: 'Patent Attorney',
+    quote: "Many patent portfolios do not reach enforcement because infringement screening is costly and difficult to scale. Patent Gap AI addresses that bottleneck.",
   },
   {
-    initials: 'DM', name: 'David Mercer',
-    role: 'Principal Patent Attorney', firm: 'Holloway IP Group',
-    tag: 'Small Firm Access',
-    quote: "As a boutique firm, we never had the resources to compete with large litigation shops on portfolio screening. Patent Gap AI levels the playing field — we can now deliver enterprise-grade infringement analysis at a fraction of the cost.",
+    initials: 'JK', name: 'W. John Keyes',
+    image: '',
+    role: 'Counsel, Intellectual Property', firm: 'TBD.',
+    tag: 'Counsel, Intellectual Property',
+    quote: "In biopharma we have many R&D intelligence tools, but none that automate patent infringement monitoring - Patent Gap AI directly addresses that gap.",
   },
   {
-    initials: 'CT', name: 'Caroline Torres',
-    role: 'Director of Patents', firm: 'Apex Life Sciences',
-    tag: 'Enforcement Prep',
-    quote: "The structured evidence reports gave our external counsel everything they needed on day one. We cut our pre-litigation preparation time by nearly three weeks and walked into every meeting with complete confidence in our documentation.",
+    initials: 'PH', name: 'Peter L. Holmes',
+    image: '/images/testimonials/peter.jpg',
+    role: 'Intellectual Property Attorney', firm: 'Peter L. Holmes, Esq.',
+    tag: 'Intellectual Property Attorney',
+    quote: "Patent Gap AI helps automate the time-intensive legal work behind claim interpretation, infringement search and analysis, and product-to-claim mapping.",
   },
   {
-    initials: 'NP', name: 'Nikhil Patel',
-    role: 'Senior Patent Counsel', firm: 'CoreBridge Global',
-    tag: 'Claim Mapping',
-    quote: "The automated claim-to-product mapping is remarkably precise. It correctly interprets claim scope the way a Federal District Court would and surfaces the strongest infringement candidates without any of the guesswork we used to rely on.",
+    initials: 'AS', name: 'Ashwani Sethi',
+    image: '/images/testimonials/test.png',
+    role: 'Patent Engineer', firm: 'Patent Engineer',
+    tag: 'Patent Engineer',
+    quote: "Identifying reliable evidence of use has traditionally been slow and manual. Patent Gap AI brings structure and scale to that analysis.",
   },
-  {
-    initials: 'JW', name: 'James Whitfield',
-    role: 'IP Strategy Partner', firm: 'Harmon & Associates',
-    tag: 'Legal Workflows',
-    quote: "Patent Gap AI slots seamlessly into our existing legal workflows. It doesn't replace attorney judgment — it amplifies it, handling the tedious groundwork so our team can focus on strategy and client advisory.",
-  },
-  {
-    initials: 'YO', name: 'Yuki Ohmura',
-    role: 'VP Intellectual Property', firm: 'Stratos Semiconductor',
-    tag: 'Large Portfolios',
-    quote: "We were sitting on a portfolio of over 400 patents with no practical way to screen them for enforcement potential. Patent Gap AI processed the entire portfolio in days and surfaced a dozen high-value opportunities we had no idea existed.",
-  },
-  {
-    initials: 'FM', name: 'Fatima Al-Mansouri',
-    role: 'Partner, Patent Prosecution', firm: 'Vega & North LLP',
-    tag: 'Early Detection',
-    quote: "The dual-sided litigation support is a game changer. Whether we're building a plaintiff's infringement case or preparing an invalidity defense, Patent Gap AI delivers analysis in hours that would previously have consumed months of associate time.",
-  },
-  {
-    initials: 'GR', name: 'Gregory Rousseau',
-    role: 'Managing Partner', firm: 'Tanaka Patent Law',
-    tag: 'Client Advisory',
-    quote: "Our clients used to come to us months after infringement had already spread. Patent Gap AI's continuous monitoring now lets us proactively alert clients the moment a potential infringer enters the market — turning reactive enforcement into a strategic advantage.",
-  },
+  
 ]
+
+// ── Reusable Avatar component ──────────────────────────────────────────────
+function Avatar({ image, initials, alt, className }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  console.log('Avatar', { image, initials, alt, imgFailed })
+
+  // Reset failed state whenever the image src changes
+  useEffect(() => {
+    setImgFailed(false)
+  }, [image])
+
+  if (image && !imgFailed) {
+    return (
+      <img
+        src={image}
+        alt={alt}
+        className={className}
+        onError={() => setImgFailed(true)}
+      />
+    )
+  }
+
+  return <div className={className}>{initials}</div>
+}
 
 function usePerPage() {
   const [per, setPer] = useState(3)
@@ -190,7 +196,6 @@ export default function TestimonialsCarousel() {
                   style={{ flex: `0 0 calc((100% - ${(perPage - 1) * 16}px) / ${perPage})` }}
                   aria-hidden={!isVisible}
                 >
-                  {/* Quote — opening mark is absolute, closing mark flows inline */}
                   <blockquote className="tc-quote">
                     <span className="tc-quotemark">&ldquo;</span>
                     {t.quote}
@@ -200,11 +205,17 @@ export default function TestimonialsCarousel() {
                   <div className="tc-rule" />
 
                   <div className="tc-person">
-                    <div className="tc-avatar" aria-hidden="true">{t.initials}</div>
+                    {/* ── CARD AVATAR: image with initials fallback ── */}
+                    <Avatar
+                      image={t.image}
+                      initials={t.initials}
+                      alt={t.name}
+                      className="tc-avatar"
+                      width={48}        // ← add this
+                      height={48} 
+                    />
                     <div className="tc-meta">
                       <span className="tc-name">{t.name}</span>
-                      {/*<span className="tc-role">{t.role}</span>
-                      <span className="tc-firm">{t.firm}</span>*/}
                     </div>
                   </div>
                 </div>
@@ -248,8 +259,13 @@ export default function TestimonialsCarousel() {
                   aria-label={`View ${t.name}'s testimonial`}
                   title={`${t.name} — ${t.firm}`}
                 >
-                  <span className="tc-thumb-initials">{t.initials}</span>
-                  
+                  {/* ── THUMB AVATAR: image with initials fallback ── */}
+                  <Avatar
+                    image={t.image}
+                    initials={t.initials}
+                    alt={t.name}
+                    className="tc-thumb-initials"
+                  />
                 </button>
               )
             })}
