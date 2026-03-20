@@ -848,6 +848,9 @@ select.form-input   { appearance: none; cursor: pointer; }
   min-width: 44px;
   border-radius: 50%;
   background: var(--surf2);
+  object-fit: cover;
+  object-position: center top;
+  flex-shrink: 0;
   border: 2px solid var(--acc-border);
   display: flex;
   align-items: center;
@@ -937,6 +940,8 @@ select.form-input   { appearance: none; cursor: pointer; }
   transition: all 0.24s cubic-bezier(0.22, 1, 0.36, 1);
   flex-shrink: 0;
   z-index: 1;
+  padding:0;
+  overflow: hidden;
 }
 .tc-thumb:hover, .tc-thumb.active { z-index: 10; }
 .tc-thumb:hover {
@@ -953,6 +958,10 @@ select.form-input   { appearance: none; cursor: pointer; }
   font-family: 'Inconsolata', monospace;
   font-size: 11px; font-weight: 700; color: var(--deep);
   letter-spacing: 0.03em; user-select: none; pointer-events: none;
+  border-radius: 50%;
+  display: block;
+  object-fit: cover;          /* crops instead of stretching */
+  object-position: center top; /* focuses crop on face */
 }
 
 /* ─── TOOLTIP ─── */
