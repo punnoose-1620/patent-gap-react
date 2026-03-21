@@ -839,13 +839,13 @@ select.form-input   { appearance: none; cursor: pointer; }
 .tc-person {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 14px;
   flex-shrink: 0;
 }
 .tc-avatar {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
+  width: 96px;
+  height: 96px;
+  min-width: 96px;
   border-radius: 50%;
   background: var(--surf2);
   object-fit: cover;
