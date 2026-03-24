@@ -3,10 +3,25 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 const TESTIMONIALS = [
   {
     initials: 'FK', name: 'Firat Koseoglu',
-    image: '/images/test_firat.jpg',
+    image: '/images/firat.jpg',
     role: 'Patent Engineer', firm: 'Patent Engineer',
     tag: 'Patent Engineer',
     quote: "Patent Gap AI transforms static patent portfolios into continuously monitored sources of evidence-backed infringement leads.",
+  },
+
+  {
+    initials: 'PH', name: 'Peter L. Holmes',
+    image: '/images/peter.jpg',
+    role: 'Intellectual Property Attorney', firm: 'Peter L. Holmes, Esq.',
+    tag: 'Intellectual Property Attorney',
+    quote: "Patent Gap AI helps automate the time-intensive legal work behind claim interpretation, infringement search and analysis, and product-to-claim mapping.",
+  },
+  {
+    initials: 'AS', name: 'Ashwani Sethi',
+    image: '/images/ashwani.png',
+    role: 'Patent Engineer', firm: 'Patent Engineer',
+    tag: 'Patent Engineer',
+    quote: "Identifying reliable evidence of use has traditionally been slow and manual. Patent Gap AI brings structure and scale to that analysis.",
   },
   {
     initials: 'BL', name: 'Brent Lindon',
@@ -22,20 +37,7 @@ const TESTIMONIALS = [
     tag: 'Counsel, Intellectual Property',
     quote: "In biopharma we have many R&D intelligence tools, but none that automate patent infringement monitoring - Patent Gap AI directly addresses that gap.",
   },
-  {
-    initials: 'PH', name: 'Peter L. Holmes',
-    image: '/images/peter_resize.jpg',
-    role: 'Intellectual Property Attorney', firm: 'Peter L. Holmes, Esq.',
-    tag: 'Intellectual Property Attorney',
-    quote: "Patent Gap AI helps automate the time-intensive legal work behind claim interpretation, infringement search and analysis, and product-to-claim mapping.",
-  },
-  {
-    initials: 'AS', name: 'Ashwani Sethi',
-    image: '/images/test.png',
-    role: 'Patent Engineer', firm: 'Patent Engineer',
-    tag: 'Patent Engineer',
-    quote: "Identifying reliable evidence of use has traditionally been slow and manual. Patent Gap AI brings structure and scale to that analysis.",
-  },
+  
   
 ]
 
