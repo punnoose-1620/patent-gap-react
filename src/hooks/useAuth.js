@@ -38,10 +38,18 @@ export const useAuth = () => {
     }
   };
 
-  const handleRegister = async (name, email, password, company) => {
+  const handleRegister = async (name, email, password, company, payload) => {
     try {
       setLoading(true);
-      await authApi.register(name, email, password, company);  // ← clean
+
+    console.log('📋 Registration payload:', {
+      name,
+      email,
+      password,
+      company,
+      fullPayload: payload,
+    });
+      await authApi.register(name, email, password, company, payload);  // ← clean
       const session = JSON.parse(localStorage.getItem('session'));
       dispatch(register(session.user));
       await loadPatents();
