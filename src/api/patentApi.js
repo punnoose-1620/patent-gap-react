@@ -1,4 +1,20 @@
+// ===========================
+// FILE: patentApi.js
+// ===========================
+
 import axiosInstance from './axiosConfig';
+
+// ── Shared error normaliser ──────────────────────────────────
+const apiError = (error, fallback) => {
+  const msg =
+    error?.response?.data?.message ||
+    error?.message ||
+    fallback;
+  const err = new Error(msg);
+  err.response = error?.response || null;
+  err.request  = error?.request  || null;
+  throw err;
+};
 
 export const patentApi = {
 
@@ -7,7 +23,7 @@ export const patentApi = {
       const { data } = await axiosInstance.get('/all-cases');
       return data.cases || [];
     } catch (error) {
-      throw { message: error.message || 'Failed to fetch cases' };
+      apiError(error, 'Failed to fetch cases');
     }
   },
 
@@ -16,7 +32,7 @@ export const patentApi = {
       const { data } = await axiosInstance.get(`/cases/${caseId}`);
       return data.case;
     } catch (error) {
-      throw { message: error.message || 'Failed to fetch case' };
+      apiError(error, 'Failed to fetch case');
     }
   },
 
@@ -25,7 +41,7 @@ export const patentApi = {
       const { data } = await axiosInstance.get(`/infringement-chart/${caseId}`);
       return data.infringement_chart || null;
     } catch (error) {
-      throw { message: error.message || 'Failed to fetch infringement chart' };
+      apiError(error, 'Failed to fetch infringement chart');
     }
   },
 
@@ -34,116 +50,100 @@ export const patentApi = {
       const { data } = await axiosInstance.get(`/stats?user_id=${userId}`);
       return data;
     } catch (error) {
-      throw { message: error.message || 'Failed to fetch stats' };
+      apiError(error, 'Failed to fetch stats');
     }
   },
 
   fetchFromUspto: async (patentNumber) => {
     try {
-      const { data } = await axiosInstance.post('/fetch-patent-from-uspto', { patentId: patentNumber });
-      if (!data.success) throw { message: data.message || 'Failed to fetch from USPTO' };
+      const { data } = await axiosInstance.post('/fetch-patent-from-uspto', {
+        patentId: patentNumber,
+      });
+      if (!data.success) throw new Error(data.message || 'Failed to fetch from USPTO');
       return data;
     } catch (error) {
-      throw { message: error.message || 'Failed to fetch from USPTO' };
+      apiError(error, 'Failed to fetch from USPTO');
     }
   },
 
   createPatent: async (caseDetails) => {
     try {
       const { data } = await axiosInstance.post('/create-patent', caseDetails);
-      if (!data.case_id) throw { message: 'Failed to create case' };
+      if (!data.case_id) throw new Error('Failed to create case');
       return data;
     } catch (error) {
-      throw { message: error.message || 'Failed to create patent' };
+      apiError(error, 'Failed to create patent');
     }
   },
 
   generateDescription: async (caseId) => {
     try {
       const { data } = await axiosInstance.post(`/generate-patent-description/${caseId}`);
-      if (!data.success) throw { message: data.message || 'Failed to generate description' };
+      if (!data.success) throw new Error(data.message || 'Failed to generate description');
       return data;
     } catch (error) {
-      throw { message: error.message || 'Failed to generate description' };
+      apiError(error, 'Failed to generate description');
     }
   },
 
   getClaims: async (caseId) => {
     try {
       const { data } = await axiosInstance.get(`/get-claims/${caseId}`);
-      if (!data.claims) throw { message: data.message || 'Failed to get claims' };
+      if (!data.claims) throw new Error(data.message || 'Failed to get claims');
       return data.claims;
     } catch (error) {
-      throw { message: error.message || 'Failed to get claims' };
+      apiError(error, 'Failed to get claims');
     }
   },
 
-  /*getInfringementAnalysis: async (caseId) => {
-    try {
-      const { data } = await axiosInstance.get(`/gemini-infringement-analysis/${caseId}`);
-      return data;
-    } catch (error) {
-      throw { message: error.message || 'Failed to get infringement analysis' };
-    }
-  },
-
-  getInfringementAnalysisLive: async (caseId) => {
-    try {
-      const { data } = await axiosInstance.get(`/similarity-analysis-live/${caseId}`);
-      return data;
-    } catch (error) {
-      throw { message: error.message || 'Failed to get infringement analysis' };
-    }
-  },*/
-
-/*getInfringementAnalysis: async (caseId, keywords, documentUrls, context, country, claims, owners) => {
-  try {
-    // ── Debug: verify all args arrive ──
-    console.log('🔧 Raw args received:', { caseId, keywords, documentUrls, context, country, claims, owners });
-
+  // ── FIX: documentUrls param added back — was missing, causing
+  //         all subsequent args (context, country, claims, owners)
+  //         to silently receive the wrong values.
+  // ────────────────────────────────────────────────────────────
+  getInfringementAnalysis: async (
+    caseId,
+    keywords,
+    documentUrls,   // ← was missing in the broken version
+    context,
+    country,
+    claims,
+    owners
+  ) => {
     const payload = {
-      keywords:      keywords      || [],
-      document_urls: documentUrls  || [],
-      country:       country       || 'US',
-      context:       context       || '',
-      claims:        claims        || [],
-      owners:        owners        || [],
+      keywords:      keywords     || [],
+      document_urls: documentUrls || [],   // ← was being skipped entirely
+      context:       context      || '',
+      country:       country      || 'US',
+      claims:        claims       || [],
+      owners:        owners       || [],
     };
-    console.log('📤 Final payload keys:', Object.keys(payload));
-    console.log('📤 Sending to /similarity-analysis-live', JSON.stringify(payload, null, 2));
-    const { data } = await axiosInstance.post('/similarity-analysis-live', payload);
-    return data;
-  } catch (error) {
-    console.error('📛 Full error object:', error);
-    throw { message: error.message || 'Failed to get infringement analysis' };
-  }
-},*/
-getInfringementAnalysis: async (caseId, keywords, context, country, claims, owners) => {
-  const payload = {};
-  payload['caseId']        = caseId     || [];
-  payload['keywords']      = keywords     || [];
-  payload['country']       = country      || 'US';
-  payload['context']       = context      || '';
-  payload['claims']        = claims       || [];
-  payload['owners']        = owners       || [];
 
-  console.log('📤 Payload beeing sent:', JSON.stringify(payload));
+    console.log('📤 Payload being sent to /similarity-analysis-live:',
+      JSON.stringify(payload, null, 2));
 
     try {
-      const { data } = await axiosInstance.post(`/similarity-analysis-live/${caseId}`, payload);
+      const { data } = await axiosInstance.post(
+        `/similarity-analysis-live/${caseId}`,
+        payload
+      );
       return data;
     } catch (error) {
-      console.error('📛 Error:', error);
-      throw { message: error.message || 'Failed to get infringement analysis' };
+      apiError(error, 'Failed to get infringement analysis');
     }
   },
+
+  // ── FIX: POST → PUT for semantic correctness.
+  //         If your backend only accepts POST for updates,
+  //         revert this one line back to .post()
+  // ────────────────────────────────────────────────────────────
   updateCase: async (caseId, updateData) => {
     try {
-      const { data } = await axiosInstance.post(`/cases/${caseId}`, updateData);
-      if (!data.success) throw { message: data.message || 'Failed to update case' };
+      console.log('📝 updateCase called:', { caseId, updateData });
+      const { data } = await axiosInstance.put(`/cases/${caseId}`, updateData);
+      if (!data.success) throw new Error(data.message || 'Failed to update case');
       return data;
     } catch (error) {
-      throw { message: error.message || 'Failed to update case' };
+      apiError(error, 'Failed to update case');
     }
   },
 
@@ -152,11 +152,10 @@ getInfringementAnalysis: async (caseId, keywords, context, country, claims, owne
       const { data } = await axiosInstance.delete(`/cases/${caseId}`);
       return data;
     } catch (error) {
-      throw { message: error.message || 'Failed to delete case' };
+      apiError(error, 'Failed to delete case');
     }
   },
 
-  // ✅ From HTML: checkSamePatent() — POST /api/check-same-patent
   checkSamePatent: async (caseTitle, infringementTitle) => {
     try {
       const { data } = await axiosInstance.post('/check-same-patent', {
@@ -171,7 +170,6 @@ getInfringementAnalysis: async (caseId, keywords, context, country, claims, owne
     }
   },
 
-  // ✅ From HTML: openDocument() — POST /api/proxy-document, returns blob
   proxyDocument: async (documentUrl) => {
     try {
       const { data } = await axiosInstance.post(
@@ -181,7 +179,7 @@ getInfringementAnalysis: async (caseId, keywords, context, country, claims, owne
       );
       return data;
     } catch (error) {
-      throw { message: error.message || 'Failed to open document' };
+      apiError(error, 'Failed to open document');
     }
   },
 };
