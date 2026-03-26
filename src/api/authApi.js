@@ -27,9 +27,12 @@ export const authApi = {
     }
   },
 
-  register: async (name, email, password, company) => {
-    try {
-      const { data } = await axiosInstance.post('/register', { name, email, password, company });
+  register: async (name, email, password, company, fullPayload = {}) => {
+  try {
+    const { data } = await axiosInstance.post('/create-attorney', {
+      name, email, password, company,
+      ...fullPayload,   // photo, jobTitle, phone, linkedIn, metadata, etc.
+    });
 
       const session = {
         user_id: data.user_id || data.user?.id,
