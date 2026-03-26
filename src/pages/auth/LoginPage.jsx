@@ -145,21 +145,7 @@ export default function LoginPage() {
 
                   {/* Password */}
                   <div className="form-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <label className="form-label" style={{ margin: 0 }}>Password *</label>
-                      <a
-                        href="#"
-                        onClick={e => { e.preventDefault(); navigate('/forgot') }}
-                        style={{
-                          fontFamily: "'Inconsolata', monospace",
-                          fontSize: 11, textTransform: 'uppercase',
-                          letterSpacing: '0.08em', color: 'var(--accent)',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        Forgot password?
-                      </a>
-                    </div>
+                   
                     <div style={{ position: 'relative' }}>
                       <input
                         className="form-input"
@@ -221,8 +207,8 @@ export default function LoginPage() {
 
                   <p style={{ fontSize: 12, color: 'var(--ink3)', textAlign: 'center', marginTop: 14, lineHeight: 1.6 }}>
                     Don't have access yet?{' '}
-                    <Link to="/request-demo" style={{ color: 'var(--accent)' }}>
-                      Request a demo
+                    <Link to="/register" style={{ color: 'var(--accent)' }}>
+                      Register
                     </Link>
                   </p>
 
