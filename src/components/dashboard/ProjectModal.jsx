@@ -4,15 +4,42 @@ import { useDispatch } from 'react-redux';
 import { addPatent } from '../../store/slices/patentSlice';
 import { patentApi } from '../../api/patentApi';
 
+const FILING_DATE_MIN = '1950-01-01';
+
+const CURRENT_STATUS_OPTIONS = [
+  'Aborted',
+  'Patented',
+  'Expired',
+  'Payment Pending',
+  'Rejected',
+  'Withdrawn',
+  'Processing'
+];
+
+function formatLocalDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 // ─── Step 1: Upload Patent ────────────────────────────────────────────────────
 
 const UploadPatentStep = ({ onClose, onContinue }) => {
   const [activeTab, setActiveTab]     = useState('upload');   // 'upload' | 'patentId'
   const [projectName, setProjectName] = useState('');
+  const [projectDescription, setProjectDescription] = useState('');
+  const [projectKeywords, setProjectKeywords] = useState('');
+  const [filingDate, setFilingDate] = useState('');
+  const [currentStatus, setCurrentStatus] = useState('Processing');
+  const [inventors, setInventors] = useState('');
+  // TODO: Add more fields as needed
   const [patentNumber, setPatentNumber] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState('');
+
+  const filingDateMax = formatLocalDateInputValue(new Date());
 
   const isValid =
     projectName.trim() &&
@@ -154,6 +181,77 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
                   </div>
                 </div>
               )}
+
+              {/* Project Description */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Project Name</label>
+                <input
+                  type="text"
+                  value={projectDescription}
+                  onChange={e => setProjectDescription(e.target.value)}
+                  placeholder="e.g., Describe the project in detail. This will be used as context for the infringement analysis."
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#191970] focus:ring-2 focus:ring-[#191970]/10 transition-all"
+                />
+              </div>
+
+              {/* Project Keywords */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Project Name</label>
+                <input
+                  type="text"
+                  value={projectKeywords}
+                  onChange={e => setProjectKeywords(e.target.value)}
+                  placeholder="e.g., Artificial Intelligence, Machine Learning, Deep Learning"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#191970] focus:ring-2 focus:ring-[#191970]/10 transition-all"
+                />
+              </div>
+
+              {/* Project Filing Date */}
+              <div className="mb-6">
+                <label htmlFor="filing-date" className="block text-sm font-medium text-gray-700 mb-2">
+                  Filing date
+                </label>
+                <input
+                  id="filing-date"
+                  type="date"
+                  min={FILING_DATE_MIN}
+                  max={filingDateMax}
+                  value={filingDate}
+                  onChange={(e) => setFilingDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#191970] focus:ring-2 focus:ring-[#191970]/10 transition-all"
+                />
+              </div>
+
+              {/* Project Inventors */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Project Name</label>
+                <input
+                  type="text"
+                  value={inventors}
+                  onChange={e => setInventors(e.target.value)}
+                  placeholder="e.g., Jane Doe, John Doe"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#191970] focus:ring-2 focus:ring-[#191970]/10 transition-all"
+                />
+              </div>
+
+              {/* Project Current Status */}
+              <div className="mb-6">
+                <label htmlFor="current-status" className="block text-sm font-medium text-gray-700 mb-2">
+                  Current status
+                </label>
+                <select
+                  id="current-status"
+                  value={currentStatus}
+                  onChange={(e) => setCurrentStatus(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#191970] focus:ring-2 focus:ring-[#191970]/10 transition-all bg-white"
+                >
+                  {CURRENT_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 
