@@ -28,7 +28,7 @@ const App = () => {
 
   useEffect(() => {
     initializeAuth();
-  }, []);
+  }, [initializeAuth]);
 
   return (
            <Routes>

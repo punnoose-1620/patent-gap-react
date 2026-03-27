@@ -10,6 +10,7 @@ import StatCard from '../../components/dashboard/StatCard';
 import ProjectCard from '../../components/dashboard/ProjectCard';
 import ProjectModal from '../../components/dashboard/ProjectModal';
 import DashboardSidebar from '../../components/layout/DashboardSidebar';
+import { useUser } from '../../hooks/useUser';
 
 const getStatusShorthand = (status) => {
   status = String(status || '');
@@ -43,15 +44,16 @@ const formatDate = (dateString) => {
 // Maps each StatCard to the patent statuses it should show
 const STAT_STATUS_MAP = {
   activeScans:      ['patented'],
-  patentsAnalyzed:  'all',                              // shows everything
-  highRiskMatches:  ['patented'],  // adjust to match your real statuses
+  patentsAnalyzed:  'all',
+  highRiskMatches:  ['patented'],
   clearedPatents:   ['complete', 'cleared', 'expired', 'abandoned'],
 };
 
 export default function DashboardPage() {
   const { patents, ui } = useStore();
-  const { setPage } = useUI();
+  const { setPage, clearError } = useUI();
   const { loadPatents, loadStats, filterPatents } = usePatents();
+  const { loadUserProfile } = useUser();
   const { logout } = useAuth();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,15 +66,19 @@ export default function DashboardPage() {
 
   // Read filters from Redux
   const searchQuery  = patents.filters.searchQuery;
-  const statusFilter = patents.filters.status; // 'all' | 'activeScans' | 'patentsAnalyzed' | 'highRiskMatches' | 'clearedPatents'
+  const statusFilter = patents.filters.status;
 
   useEffect(() => {
+    clearError();
     handleLoadDashboard();
+    loadUserProfile();
   }, []);
 
   const handleLoadDashboard = async () => {
     console.log('🔐 Session:', JSON.parse(localStorage.getItem('session') || '{}'));
-    await Promise.all([loadPatents()]);
+    // FIX 1: Call both loadPatents AND loadStats so patents.stats.highRiskMatches
+    // gets populated from the backend (previously only loadPatents was called).
+    await Promise.all([loadPatents(), loadStats()]);
   };
 
   const handleRefresh = async () => {
@@ -98,10 +104,28 @@ export default function DashboardPage() {
     keywords: p.keywords,
     description: p.description,
     matchesCount: p.matchCount || p.match_count || 0,
+    // FIX 2: Extract per-patent high risk count so we can use it as a local
+    // fallback when the backend stats endpoint returns nothing.
+    highRiskCount: p.highRiskMatches || p.high_risk_matches || 0,
     documentsCount: p.documentsCount,
     progress: p.progress || 0,
+    infringementAnalysisStatus: p.infringement_analysis_status || 'unknown',
   }));
+
+  console.log('📊 Raw patent fields:', patents.patents[0]);
   console.log('📋 All statuses:', mappedPatents.map(p => ({ title: p.title, status: p.status })));
+
+  // FIX 3: Compute highRiskMatches locally by summing per-patent counts.
+  // This mirrors what home_new.html does:
+  //   cases.reduce((sum, c) => sum + (c.highRiskMatches || 0), 0)
+  // Used as a fallback when patents.stats.highRiskMatches is not yet available.
+  const localHighRiskMatches = mappedPatents.reduce(
+    (sum, p) => sum + (p.highRiskCount || 0),
+    0
+  );
+
+  // Resolved value: backend stat takes priority, local sum is the fallback.
+  const highRiskMatchesValue = patents.stats.highRiskMatches || localHighRiskMatches;
 
   // Step 1 — filter by status card selection
   const statusFilteredPatents = (() => {
@@ -218,8 +242,9 @@ export default function DashboardPage() {
         {/* ── Content ── */}
         <div className="dash-content">
 
-          {/* Alert */}
-          {!alertDismissed && (patents.stats.highRiskMatches > 0 || true) && (
+          {/* Alert — FIX 4: Removed hardcoded `|| true` so the alert only shows
+              when there are actual high risk matches or a real error. */}
+          {!alertDismissed && (highRiskMatchesValue > 0 || ui.error) && (
             <div className="alert">
               <div className="alert-icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -231,7 +256,7 @@ export default function DashboardPage() {
               <div className="alert-body">
                 {ui.error
                   ? <><strong>Error:</strong> {ui.error}</>
-                  : <><strong>{patents.stats.highRiskMatches || 0} HIGH risk findings</strong> require attorney review — potential infringement detected.</>
+                  : <><strong>{highRiskMatchesValue} HIGH risk findings</strong> require attorney review — potential infringement detected.</>
                 }
               </div>
               <button className="alert-close" onClick={() => setAlertDismissed(true)}>×</button>
@@ -245,7 +270,6 @@ export default function DashboardPage() {
               <h1 className="page-title">Patent <em>Monitoring</em></h1>
             </div>
             <div className="hd-actions">
-              {/* Show reset filter pill when a stat card is active */}
               {statusFilter && statusFilter !== 'all' && (
                 <button
                   className="btn-filter-reset"
@@ -275,7 +299,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ── Stats — each card is clickable, active card highlighted ── */}
+          {/* ── Stats ── */}
           <div className="stats-grid">
             <StatCard
               title="Active Scans"
@@ -295,9 +319,11 @@ export default function DashboardPage() {
               onClick={() => handleStatCardClick('patentsAnalyzed')}
               isActive={statusFilter === 'patentsAnalyzed'}
             />
+            {/* FIX 3 applied here: uses highRiskMatchesValue (backend || local sum)
+                instead of patents.stats.highRiskMatches || 0 */}
             <StatCard
               title="High Risk Matches"
-              value={ui.loading ? '—' : (patents.stats.highRiskMatches || 0)}
+              value={ui.loading ? '—' : highRiskMatchesValue}
               subtitle="Requires attention"
               icon={<AlertTriangle size={18} />}
               color="yellow"
@@ -336,9 +362,9 @@ export default function DashboardPage() {
                 <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
               </button>
               <button
-                  className="btn-viewall"
-                  onClick={() => filterPatents({ status: 'all', searchQuery: '' })}
-                >
+                className="btn-viewall"
+                onClick={() => filterPatents({ status: 'all', searchQuery: '' })}
+              >
                 <span>View All</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="5" y1="12" x2="19" y2="12"/>
@@ -406,7 +432,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ── Weekly Search Section — hidden while searching or filtering ── */}
+          {/* ── Weekly Search Section ── */}
           {!searchQuery.trim() && (!statusFilter || statusFilter === 'all') && (
             <>
               <div className="sec-hd" style={{ marginTop: 40 }}>
@@ -467,7 +493,6 @@ export default function DashboardPage() {
         }
         .animate-fadeInUp { animation: fadeInUp 0.6s ease-out forwards; }
 
-        /* ── Search clear button ── */
         .tn-search { position: relative; display: flex; align-items: center; }
         .tn-search-clear {
           position: absolute;
@@ -484,7 +509,6 @@ export default function DashboardPage() {
         }
         .tn-search-clear:hover { color: var(--ink1); }
 
-        /* ── Clear filter pill ── */
         .btn-filter-reset {
           display: inline-flex;
           align-items: center;
@@ -503,7 +527,6 @@ export default function DashboardPage() {
           background: color-mix(in srgb, var(--accent) 20%, transparent);
         }
 
-        /* ── Stats grid ── */
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -511,17 +534,14 @@ export default function DashboardPage() {
           margin-bottom: 32px;
         }
 
-        /* ── Patents grid ── */
         .patents-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 20px;
         }
 
-        /* ── Weekly card ── */
         .weekly-card { max-width: 100%; width: 100%; }
 
-        /* ── Top nav defaults ── */
         .tn-center    { display: flex; }
         .tn-sep       { display: block; }
         .tn-sub       { display: block; }
@@ -529,7 +549,6 @@ export default function DashboardPage() {
         .btn-label    { display: inline; }
         .tn-btn--home span { display: inline; }
 
-        /* ════ MEDIUM DESKTOP 1024–1279px ════ */
         @media (max-width: 1279px) {
           .stats-grid { gap: 16px; }
           .patents-grid {
@@ -538,7 +557,6 @@ export default function DashboardPage() {
           }
         }
 
-        /* ════ TABLET LANDSCAPE 768–1023px ════ */
         @media (max-width: 1023px) {
           .dash-content { padding: 20px 20px 40px !important; }
           .tn-sep { display: none; }
@@ -562,7 +580,6 @@ export default function DashboardPage() {
           .sec-hd { flex-wrap: wrap; gap: 10px; }
         }
 
-        /* ════ TABLET PORTRAIT 600–767px ════ */
         @media (max-width: 767px) {
           .topnav { padding: 0 14px !important; height: 52px !important; }
           .tn-center { display: none; }
@@ -588,7 +605,6 @@ export default function DashboardPage() {
           .sec-title { font-size: 14px !important; }
         }
 
-        /* ════ MOBILE < 600px ════ */
         @media (max-width: 599px) {
           .topnav { padding: 0 12px !important; height: 50px !important; }
           .tn-center    { display: none; }
@@ -633,7 +649,6 @@ export default function DashboardPage() {
           .pcard-title { font-size: 14px !important; }
         }
 
-        /* ════ TINY MOBILE < 380px ════ */
         @media (max-width: 379px) {
           .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
           .page-title { font-size: 18px !important; }

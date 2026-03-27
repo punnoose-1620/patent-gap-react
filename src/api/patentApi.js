@@ -100,7 +100,7 @@ export const patentApi = {
   //         all subsequent args (context, country, claims, owners)
   //         to silently receive the wrong values.
   // ────────────────────────────────────────────────────────────
-  getInfringementAnalysis: async (
+  /*getInfringementAnalysis: async (
     caseId,
     keywords,
     documentUrls,   // ← was missing in the broken version
@@ -130,22 +130,56 @@ export const patentApi = {
     } catch (error) {
       apiError(error, 'Failed to get infringement analysis');
     }
-  },
+  },*/
+  getInfringementAnalysis: async (
+  caseId,
+  keywords,
+  documentUrls,
+  context,
+  country,
+  claims,
+  owners,
+  signal        // ← add this
+) => {
+  const payload = {
+    keywords:      keywords     || [],
+    document_urls: documentUrls || [],
+    context:       context      || '',
+    country:       country      || 'US',
+    claims:        claims       || [],
+    owners:        owners       || [],
+  };
+
+  console.log('📤 Payload being sent to /similarity-analysis-live:',
+    JSON.stringify(payload, null, 2));
+
+  try {
+    const { data } = await axiosInstance.post(
+      `/similarity-analysis-live/${caseId}`,
+      payload,
+      { signal }   // ← add this (axios supports AbortSignal since v0.22)
+    );
+    return data;
+  } catch (error) {
+    apiError(error, 'Failed to get infringement analysis');
+  }
+},
 
   // ── FIX: POST → PUT for semantic correctness.
   //         If your backend only accepts POST for updates,
   //         revert this one line back to .post()
   // ────────────────────────────────────────────────────────────
   updateCase: async (caseId, updateData) => {
-    try {
-      console.log('📝 updateCase called:', { caseId, updateData });
-      const { data } = await axiosInstance.put(`/cases/${caseId}`, updateData);
-      if (!data.success) throw new Error(data.message || 'Failed to update case');
-      return data;
-    } catch (error) {
-      apiError(error, 'Failed to update case');
-    }
-  },
+  try {
+    const payload = { _id: caseId, ...updateData };  // ← ADD THIS
+    console.log('📝 updateCase called:', { caseId, payload });
+    const { data } = await axiosInstance.post(`/update-patent`, payload);
+    if (!data.success) throw new Error(data.message || 'Failed to update case');
+    return data;
+  } catch (error) {
+    apiError(error, 'Failed to update case');
+  }
+},
 
   deleteCase: async (caseId) => {
     try {

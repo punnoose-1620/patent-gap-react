@@ -57,14 +57,58 @@ export const authApi = {
     }
   },
 
-  resetPassword: async (token, newPassword) => {
+  /*resetPassword: async (token, newPassword) => {
     try {
-      const { data } = await axiosInstance.post('/reset-password', { token, newPassword });
+      const { data } = await axiosInstance.post('/update-password', { token, newPassword });
       return data;
     } catch (error) {
       throw error.response?.data || { message: 'Password reset failed' };
     }
-  },
+  },*/
+
+updateProfile: async (payload) => {
+  try {
+    const session = JSON.parse(localStorage.getItem('session') || '{}');
+    const userId = session.user_id || session.user?.id || session.email;
+
+    const finalPayload = {
+      _id: userId,
+      ...payload,
+    };
+    console.log('📤 updateProfile payload:', finalPayload); // ← ADD THIS
+
+    const { data } = await axiosInstance.post('/update-attorney', finalPayload, {
+      headers: {
+        'X-User-ID': userId,
+      }
+    });
+
+    console.log('✅ Profile updated:', data);
+    return data;
+  } catch (error) {
+    throw error.response?.data || { message: 'Failed to update profile' };
+  }
+},
+
+changePassword: async (currentPassword, newPassword) => {
+  try {
+    const session = JSON.parse(localStorage.getItem('session') || '{}');
+    const userId = session.user_id || session.user?.id || session.email;
+
+    console.log('🔑 changePassword:', { userId, currentPassword, newPassword }); // ← ADD THIS
+
+    const { data } = await axiosInstance.post('/update-password', {
+      user_id: userId,
+      old_password: currentPassword,
+      password: newPassword,
+    });
+
+    console.log('✅ Password changed:', data);
+    return data;
+  } catch (error) {
+    throw error.response?.data || { message: 'Failed to change password' };
+  }
+},
 
   logout: async () => {
     try {
@@ -76,12 +120,31 @@ export const authApi = {
     }
   },
 
+  
   getCurrentUser: async () => {
-    try {
-      const { data } = await axiosInstance.get('/me');
-      return data;
-    } catch (error) {
-      throw error.response?.data || { message: 'Failed to fetch user data' };
+  try {
+    const session = JSON.parse(localStorage.getItem('session') || '{}');
+    
+    // ✅ Get user_id — fall back to email since your backend returns user_id: null
+    const userId = session.user_id || session.user?.id || session.email;
+
+    if (!userId) {
+      throw { message: 'No session found' };
     }
-  },
+
+    console.log('📤 Fetching profile with X-User-ID:', userId);
+
+    const { data } = await axiosInstance.get('/profile', {
+      headers: {
+        'X-User-ID': userId,   // ✅ backend reads this header
+      }
+    });
+
+    console.log('📦 Profile response:', data);
+    return data;
+
+  } catch (error) {
+    throw error.response?.data || { message: 'Failed to fetch user data' };
+  }
+},
 };

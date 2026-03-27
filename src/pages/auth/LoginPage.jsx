@@ -16,15 +16,11 @@ export default function LoginPage() {
   const { login } = useAuth()
   const { auth } = useStore()
 
-  useEffect(() => {
-    if (auth.isAuthenticated) {
-      navigate('/dashboard')
-    }
-  }, [auth.isAuthenticated])
+  
 
   const handle = e => setForm({ ...form, [e.target.name]: e.target.value })
 
-  const submit = async e => {
+ const submit = async e => {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -36,11 +32,13 @@ export default function LoginPage() {
 
     try {
       const result = await login(form.email, form.password)
+      console.log('Result:', result)                        // ← is success: true?
+    console.log('Session:', localStorage.getItem('session')) // ← is session saved?
       clearTimeout(wakeTimer)
       if (!result.success) {
         setError(result.error || 'Login failed. Please try again.')
       } else {
-        navigate('/dashboard')
+        navigate('/dashboard', { replace: true }) // ✅ replace so back button doesn't return to login
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')
@@ -49,6 +47,7 @@ export default function LoginPage() {
       setLoading(false)
     }
   }
+
 
   return (
     <>

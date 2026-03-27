@@ -2,6 +2,7 @@ import { useDispatch } from "react-redux";
 import { setPage, setLoading, setError, clearError } from "../store/slices/uiSlice";
 
 export const useUI = () => {
+  
   const dispatch = useDispatch();
 
   return {

@@ -9,6 +9,7 @@ import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-do
 import { useDispatch } from 'react-redux';
 import { useAuth } from '../../hooks/useAuth';
 import InfringementModal from '../../components/dashboard/InfringementModal';
+import DocumentModal from '../../components/dashboard/DocumentModal';    // ← NEW
 import DashboardSidebar from '../../components/layout/DashboardSidebar';
 import { patentApi } from '../../api/patentApi';
 import { deletePatent, updatePatent } from '../../store/slices/patentSlice';
@@ -150,6 +151,7 @@ const InfoRow = ({ icon: Icon, label, value }) => (
     <span className="pd-info-value">{value}</span>
   </div>
 );
+
 // ─── Inline editable claims list ─────────────────────────────────────────────
 const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
   const [editing,   setEditing]   = useState(false)
@@ -157,7 +159,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
   const [saving,    setSaving]    = useState(false)
   const [saveError, setSaveError] = useState(null)
 
-  // Keep in sync if parent data reloads
   useEffect(() => { setClaims(initialClaims || []) }, [initialClaims])
 
   const startEdit = () => { setEditing(true); setSaveError(null) }
@@ -174,7 +175,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
 
   const addClaim = () => {
     setClaims(prev => [...prev, ''])
-    // Focus the new textarea on next tick
     setTimeout(() => {
       const textareas = document.querySelectorAll('.claim-textarea')
       textareas[textareas.length - 1]?.focus()
@@ -197,7 +197,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
     const trimmed = claims.map(c => c.trim()).filter(Boolean)
     if (!trimmed.length) { setSaveError('At least one claim is required.'); return }
 
-    // No change check
     const orig = (initialClaims || []).map(c => c.trim()).filter(Boolean)
     if (JSON.stringify(trimmed) === JSON.stringify(orig)) { setEditing(false); return }
 
@@ -218,7 +217,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
   if (!editing) {
     return (
       <div style={{ position: 'relative' }}>
-        {/* Edit button top-right */}
         <button
           onClick={startEdit}
           title="Edit claims"
@@ -238,7 +236,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
           </svg>
         </button>
 
-        {/* Claims list */}
         <div style={{ display: 'flex', flexDirection: 'column', paddingRight: 28 }}>
           {claims.map((claim, index) => {
             const parts        = claim.split('. ')
@@ -286,7 +283,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
             padding: '10px 12px',
             border: '1px solid var(--rule2)',
           }}>
-            {/* Claim number badge */}
             <span style={{
               fontFamily: "'Inconsolata', monospace", fontSize: 10, fontWeight: 700,
               color: 'var(--accent)', background: 'var(--acc-soft)',
@@ -296,7 +292,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
               {index + 1}
             </span>
 
-            {/* Textarea */}
             <textarea
               className="claim-textarea"
               value={claim}
@@ -319,7 +314,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
               onBlur={e  => e.target.style.borderColor = 'var(--rule2)'}
             />
 
-            {/* Up / Down / Remove controls */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
               <button
                 onClick={() => moveClaim(index, -1)}
@@ -361,7 +355,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
         ))}
       </div>
 
-      {/* Add claim button */}
       <button
         onClick={addClaim}
         style={{
@@ -390,7 +383,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
         Add Claim
       </button>
 
-      {/* Error */}
       {saveError && (
         <p style={{
           fontSize: 12, color: 'var(--red)', margin: '0 0 10px',
@@ -400,7 +392,6 @@ const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
         </p>
       )}
 
-      {/* Save / Cancel / Hint */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <button
           onClick={save}
@@ -455,21 +446,20 @@ const controlBtnStyle = (disabled) => ({
   color: disabled ? 'var(--rule2)' : 'var(--ink3)',
   transition: 'all 0.15s',
 })
+
 // ─── Inline editable context/description ─────────────────────────────────────
 const ContextEditor = ({ caseId, initialValue, onSave }) => {
-  const [editing, setEditing]   = useState(false)
-  const [value, setValue]       = useState(initialValue || '')
-  const [saving, setSaving]     = useState(false)
+  const [editing, setEditing]     = useState(false)
+  const [value, setValue]         = useState(initialValue || '')
+  const [saving, setSaving]       = useState(false)
   const [saveError, setSaveError] = useState(null)
-  const textareaRef             = useRef()
+  const textareaRef               = useRef()
 
-  // Keep in sync if parent data reloads
   useEffect(() => { setValue(initialValue || '') }, [initialValue])
 
   const startEdit = () => {
     setEditing(true)
     setSaveError(null)
-    // Focus + move cursor to end on next tick
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus()
@@ -487,7 +477,7 @@ const ContextEditor = ({ caseId, initialValue, onSave }) => {
   const save = async () => {
     const trimmed = value.trim()
     if (!trimmed) { setSaveError('Description cannot be empty.'); return }
-    if (trimmed === (initialValue || '').trim()) { setEditing(false); return } // no change
+    if (trimmed === (initialValue || '').trim()) { setEditing(false); return }
 
     try {
       setSaving(true)
@@ -502,10 +492,9 @@ const ContextEditor = ({ caseId, initialValue, onSave }) => {
     }
   }
 
-  // Ctrl+Enter saves, Escape cancels
   const handleKeyDown = (e) => {
-    if (e.key === 'Escape')                      { cancel(); return }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { save(); return }
+    if (e.key === 'Escape')                           { cancel(); return }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { save();   return }
   }
 
   if (!editing) {
@@ -568,7 +557,6 @@ const ContextEditor = ({ caseId, initialValue, onSave }) => {
       )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        {/* Save */}
         <button
           onClick={save}
           disabled={saving}
@@ -595,7 +583,6 @@ const ContextEditor = ({ caseId, initialValue, onSave }) => {
           )}
         </button>
 
-        {/* Cancel */}
         <button
           onClick={cancel}
           disabled={saving}
@@ -605,7 +592,6 @@ const ContextEditor = ({ caseId, initialValue, onSave }) => {
           Cancel
         </button>
 
-        {/* Keyboard hint */}
         <span style={{
           fontFamily: "'Inconsolata', monospace", fontSize: 10,
           color: 'var(--ink3)', textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -753,7 +739,8 @@ const PatentDetailPage = () => {
   const [selectedMatch,   setSelectedMatch]   = useState(null);
   const [sidebarOpen,     setSidebarOpen]     = useState(false);
   const [activeItem,      setActiveItem]      = useState('projects');
-  const [loadingDocIndex, setLoadingDocIndex] = useState(null);
+  // ── CHANGED: replaced loadingDocIndex with docModalIndex ──────────────── //
+  const [docModalIndex,   setDocModalIndex]   = useState(null); // null = closed
 
   // ── Ref for the background polling interval ──
   const pollIntervalRef = useRef(null);
@@ -770,16 +757,14 @@ const PatentDetailPage = () => {
   const documentsCount = caseData?.documents?.length || projectData.documentsCount || 1;
   const isProcessing   = (caseData?.status || '').toLowerCase().includes('processing');
   const claimsChart    = caseData?.claimsChart || {};
-  const infringementAnalysisStatus = caseData?.infringementAnalysisStatus || 'unknown';
+  //const infringementAnalysisStatus = caseData?.infringementAnalysisStatus || 'unknown';
+  const infringementAnalysisStatus = caseData?.infringement_analysis_status || 'unknown';
 
-  // ── Only show real claims from the API — no hardcoded placeholders ──
   const displayClaims = caseData?.claims || [];
 
-  // ── Raw matches from API ──
   const realMatches = caseData?.infringements || [];
   console.log('📋 Raw infringements from API:', realMatches);
 
-  // ── Normalise each match regardless of format ──
   const potentialMatches = realMatches.length > 0
     ? realMatches.map(m => {
         const normalised = normaliseMatch(m);
@@ -788,34 +773,27 @@ const PatentDetailPage = () => {
       })
     : [];
 
-  // ─────────────────────────────────────────────────────────────
-  // Determine what the Potential Matches section should render:
-  //
-  //  1. If infringementAnalysisStatus === 'completed'
-  //     → show realMatches (or "no matches" empty state)
-  //
-  //  2. If infringementAnalysisStatus === 'unknown' | 'None' | null | ''
-  //     → fall back: show realMatches if any exist, else show empty state
-  //
-  //  3. Any other status (pending / processing / running / queued …)
-  //     → show a status loader — analysis is in flight
-  // ─────────────────────────────────────────────────────────────
-  const iaStatus      = String(infringementAnalysisStatus || '').toLowerCase();
+  /*const iaStatus      = String(infringementAnalysisStatus || '').toLowerCase();
   const iaIsCompleted = iaStatus === 'completed';
   const iaIsUnknown   = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
-  const iaIsInFlight  = !iaIsCompleted && !iaIsUnknown; // pending / processing / running / queued …
+  const iaIsInFlight  = !iaIsCompleted && !iaIsUnknown;
 
-  // Should we render the match cards?
   const shouldShowMatches =
     (iaIsCompleted && realMatches.length > 0) ||
     (iaIsUnknown   && realMatches.length > 0);
 
-  // Should we render the "no matches" empty state?
   const shouldShowEmpty =
     (iaIsCompleted && realMatches.length === 0) ||
-    (iaIsUnknown   && realMatches.length === 0);
+    (iaIsUnknown   && realMatches.length === 0);*/
+    // ✅ REPLACE with this — simple, always shows matches if they exist
+    const shouldShowMatches = realMatches.length > 0;
+    const shouldShowEmpty   = !analysisLoading && realMatches.length === 0;
+    // iaIsInFlight is only used for the polling — keep it for that
+    const iaStatus     = String(infringementAnalysisStatus || '').toLowerCase();
+    const iaIsCompleted = iaStatus === 'completed';
+    const iaIsUnknown  = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
+    const iaIsInFlight = !iaIsCompleted && !iaIsUnknown;
 
-  // ── Shared helper: fetch case + chart, return the merged object ──
   const loadCase = useCallback(async () => {
     const c = await patentApi.getCaseById(caseId);
     try {
@@ -825,7 +803,6 @@ const PatentDetailPage = () => {
     return c;
   }, [caseId]);
 
-  // ── Initial load (shows full-page spinner) ──
   const fetchCaseDetails = useCallback(async () => {
     if (!caseId) { setPageLoading(false); return; }
     try {
@@ -833,12 +810,25 @@ const PatentDetailPage = () => {
       const c = await loadCase();
       setCaseData(c);
 
+        console.log('🗂️ FULL caseData:', JSON.stringify(c, null, 2));
+
+
       console.log('🗂️ caseData keys:', Object.keys(c));
       console.log('🗂️ caseData.claims:', c?.claims);
       console.log('🗂️ caseData.infringements:', c?.infringements);
       console.log('🗂️ caseData.documents:', c?.documents);
-      console.log('🗂️ caseData.infringementAnalysisStatus:', c?.infringementAnalysisStatus);
+      console.log('🗂️ caseData.infringementAnalysisStatus:', c?.infringement_analysis_status);
       console.log('🗂️ FULL caseData:', JSON.stringify(c, null, 2));
+
+
+      // ✅ Add these specific ones for infringement analysis
+    console.log('🔍 status:', c?.status);
+    console.log('🔍 infringementAnalysisStatus:', c?.infringement_analysis_status);
+    console.log('🔍 infringements count:', c?.infringements?.length);
+    console.log('🔍 infringements sample:', c?.infringements?.[0]);
+
+
+
     } catch (err) {
       console.error('Error fetching case details:', err);
       setPageError(err?.message || 'Failed to load case');
@@ -847,16 +837,14 @@ const PatentDetailPage = () => {
     }
   }, [caseId, loadCase]);
 
-  // ── Silent background poll (no page-level spinner) ──
   const pollCaseDetails = useCallback(async () => {
     if (!caseId) return;
     try {
       const c = await loadCase();
-      console.log('🔄 Poll — infringementAnalysisStatus:', c?.infringementAnalysisStatus);
+      console.log('🔄 Poll — infringementAnalysisStatus:', c?.infringement_analysis_status);
       setCaseData(c);
 
-      // Stop polling once the backend reports 'completed'
-      const polledStatus = String(c?.infringementAnalysisStatus || '').toLowerCase();
+      const polledStatus = String(c?.infringement_analysis_status || '').toLowerCase();
       if (polledStatus === 'completed') {
         console.log('✅ Poll: analysis completed — stopping interval');
         clearInterval(pollIntervalRef.current);
@@ -867,33 +855,27 @@ const PatentDetailPage = () => {
     }
   }, [caseId, loadCase]);
 
-  // ── Start / stop the 2-minute polling interval ──
-  // Polling runs whenever:
-  //   • the user triggers a manual analysis (analysisLoading === true), OR
-  //   • the backend status is still in-flight on page load (iaIsInFlight)
-  // It stops as soon as the status becomes 'completed'.
-  useEffect(() => {
-    const shouldPoll = analysisLoading || iaIsInFlight;
+ // ✅ Replace the polling useEffect
+useEffect(() => {
+  // Only poll when USER triggered analysis, not on page load
+  const shouldPoll = analysisLoading;   // ← removed iaIsInFlight
 
-    if (shouldPoll && !pollIntervalRef.current) {
-      console.log('⏱️ Starting 2-min background poll');
-      pollIntervalRef.current = setInterval(pollCaseDetails, 2 * 60 * 1000);
-    }
+  if (shouldPoll && !pollIntervalRef.current) {
+    pollIntervalRef.current = setInterval(pollCaseDetails, 15 * 1000); // 15s not 2min
+  }
 
-    if (!shouldPoll && pollIntervalRef.current) {
-      console.log('🛑 Stopping background poll (no longer needed)');
+  if (!shouldPoll && pollIntervalRef.current) {
+    clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = null;
+  }
+
+  return () => {
+    if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
-
-    // Cleanup on unmount
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    };
-  }, [analysisLoading, iaIsInFlight, pollCaseDetails]);
+  };
+}, [analysisLoading, pollCaseDetails]);  // ← removed iaIsInFlight
 
   useEffect(() => { fetchCaseDetails(); }, [fetchCaseDetails]);
 
@@ -919,6 +901,18 @@ const PatentDetailPage = () => {
       const analysisData  = await patentApi.getInfringementAnalysis(
         caseId, keywords, urls, context, country, claims, owners
       );
+
+      // ── ADD THIS GUARD ──
+      if (!analysisData) {
+        console.error('❌ getInfringementAnalysis returned undefined/null');
+        alert('Analysis returned no data. Please check the API.');
+        return;
+      }
+
+      console.log('✅ Raw analysisData:', JSON.stringify(analysisData, null, 2));
+      // ── END GUARD ──
+
+
       const infringements = analysisData.similar_infringements || [];
       const newClaims     = analysisData.claims || [];
 
@@ -978,19 +972,9 @@ const PatentDetailPage = () => {
     } catch (err) { alert(`Error: ${err?.message}`); }
   };
 
-  const openDocument = async (url, index) => {
-    const fileName = url.split('/').pop();
-    const fileType = url.endsWith('.pdf') ? 'application/pdf' : 'application/xml';
-    setLoadingDocIndex(index);
-    try {
-      const blob = await patentApi.proxyDocument(url);
-      const file = new File([blob], fileName, { type: fileType });
-      window.open(URL.createObjectURL(file), '_blank');
-    } catch (e) {
-      alert('Error opening document: ' + (e?.message || e));
-    } finally {
-      setLoadingDocIndex(null);
-    }
+  // ── CHANGED: just sets the modal index — no blob fetch ────────────────── //
+  const openDocument = (index) => {
+    setDocModalIndex(index);
   };
 
   if (pageLoading) {
@@ -1158,7 +1142,7 @@ const PatentDetailPage = () => {
                 </div>
               )}
             </div>
-            <div className="pcard-progress">
+            {/*<div className="pcard-progress">
               <div className="prog-track">
                 <div className={`prog-fill ${fillClass}`} style={{ width: `${progressPct}%` }} />
               </div>
@@ -1177,7 +1161,7 @@ const PatentDetailPage = () => {
                 <div className="live-bars"><span /><span /><span /><span /></div>
                 Live
               </div>
-            </div>
+            </div>*/}
           </div>
 
           {/* ── Processing progress ── */}
@@ -1203,17 +1187,14 @@ const PatentDetailPage = () => {
               <InfoRow icon={Tag}      label="Keywords"     value={keywords} />
             </SectionCard>
 
-
             {/* Context & Description — editable */}
-
-
             <SectionCard title="Context & Description" eyebrow="Overview" icon={FileText}>
               <ContextEditor
                 caseId={caseId}
                 initialValue={description}
                 onSave={(newDesc) => setCaseData(prev => ({ ...prev, context: newDesc }))}
               />
-          
+
               {(caseData?.companies?.length > 0 || caseData?.countries?.length > 0 || caseData?.terms?.length > 0) && (
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--rule2)' }}>
                   <div style={{ fontFamily: "'Inconsolata', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink3)', marginBottom: 10 }}>Search Strategy</div>
@@ -1252,29 +1233,23 @@ const PatentDetailPage = () => {
             <div className="pd-docs-grid">
               {caseData?.documents?.length > 0
                 ? caseData.documents.map((doc, i) => {
+                    // ── Thumbnail visuals are 100% unchanged ──────────────── //
                     const url            = doc.url || '';
                     const ext            = url.split('.').pop();
                     const src            = doc.source || '';
                     const bgImg          = src === 'uspto' ? 'uspto.jpg' : 'local.png';
-                    const isLoadingThis  = loadingDocIndex === i;
                     return (
-                      <div key={i} onClick={() => !isLoadingThis && openDocument(url, i)} className="pd-doc-thumb">
+                      <div key={i} onClick={() => openDocument(i)} className="pd-doc-thumb">
                         <div
                           className="pd-doc-inner"
-                          onMouseEnter={e => { if (!isLoadingThis) e.currentTarget.style.transform = 'translateY(-3px)'; }}
-                          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-                          style={{ cursor: isLoadingThis ? 'wait' : 'pointer' }}
+                          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+                          style={{ cursor: 'pointer' }}
                         >
+                          {/* original image — untouched */}
                           <img src={`/images/${bgImg}`} alt={src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           <div className="pd-doc-blur" />
-                          {isLoadingThis ? (
-                            <div className="pd-doc-loader">
-                              <div className="pd-doc-spinner" />
-                              <span className="pd-doc-loader-text">Opening…</span>
-                            </div>
-                          ) : (
-                            <div className="pd-doc-label">{i + 1}.{ext}</div>
-                          )}
+                          <div className="pd-doc-label">{i + 1}.{ext}</div>
                         </div>
                       </div>
                     );
@@ -1345,85 +1320,44 @@ const PatentDetailPage = () => {
               </div>
             </div>
 
-            {/* ── CASE 1: manual analysis triggered by the user is running ── */}
-            {analysisLoading && (
-              <>
-                <div className="pd-card-body" style={{ textAlign: 'center', padding: '40px 24px', marginBottom: potentialMatches.length > 0 ? 16 : 0 }}>
-                  <div style={{ width: 36, height: 36, border: '3px solid var(--rule2)', borderTop: '3px solid var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
-                  <p style={{ fontSize: 13, color: 'var(--ink3)', margin: '0 0 4px' }}>
-                    {analysisStatus === 'claims' ? 'Isolating Claims…' : analysisStatus === 'infringement' ? 'Finding Infringements…' : 'Processing…'}
-                  </p>
-                  <p style={{ fontSize: 11, color: 'var(--ink3)', fontFamily: "'Inconsolata', monospace", textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
-                    Background refresh every 2 min
-                  </p>
-                </div>
+           
+                  {/* ── CASE 1: user clicked Run Analysis ── */}
+      {analysisLoading && (
+        <div className="pd-card-body" style={{ textAlign: 'center', padding: '40px 24px', marginBottom: 16 }}>
+          <div style={{ width: 36, height: 36, border: '3px solid var(--rule2)', borderTop: '3px solid var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <p style={{ fontSize: 13, color: 'var(--ink3)', margin: '0 0 4px' }}>
+            {analysisStatus === 'claims' ? 'Isolating Claims…' : 'Finding Infringements…'}
+          </p>
+        </div>
+      )}
 
-                {/* Show any already-existing matches while the new analysis runs */}
-                {potentialMatches.length > 0 && (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                      <div style={{ height: 1, flex: 1, background: 'var(--rule2)' }} />
-                      <span style={{ fontFamily: "'Inconsolata', monospace", fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)', flexShrink: 0 }}>
-                        Previous results
-                      </span>
-                      <div style={{ height: 1, flex: 1, background: 'var(--rule2)' }} />
-                    </div>
-                    <div className="cards-grid">
-                      {potentialMatches.map((match, index) => (
-                        <MatchCard
-                          key={index}
-                          match={match}
-                          updatedAt={updatedAt}
-                          onSelect={setSelectedMatch}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
+      {/* ✅ REMOVE CASE 2 entirely — delete this whole block */}
+      {/* {!analysisLoading && iaIsInFlight && ( ... )} */}
 
-            {/* ── CASE 2: page just loaded & infringement_analysis_status is in-flight ── */}
-            {!analysisLoading && iaIsInFlight && (
-              <div className="pd-card-body pd-ia-status-loader">
-                <div className="pd-ia-spinner-wrap">
-                  <div style={{ width: 36, height: 36, border: '3px solid var(--rule2)', borderTop: '3px solid var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
-                  <div>
-                    <p className="pd-ia-status-title">Analysis in progress</p>
-                    <p className="pd-ia-status-sub">{getAnalysisStatusLabel(infringementAnalysisStatus)}</p>
-                  </div>
-                </div>
-                <div className="pd-ia-status-pill">
-                  <span className="pd-ia-dot" />
-                  {infringementAnalysisStatus}
-                </div>
-              </div>
-            )}
+      {/* ── CASE 3: no matches, not loading ── */}
+      {shouldShowEmpty && (
+        <div className="pd-card-body pd-no-matches">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>✅</span>
+            <p style={{ fontSize: 13.5, color: 'var(--ink2)', margin: 0 }}>No potential infringement matches found.</p>
+          </div>
+          <button className="btn-new" onClick={beginSimilarityAnalysis}>Start Analysis</button>
+        </div>
+      )}
 
-            {/* ── CASE 3: completed / unknown + no matches ── */}
-            {!analysisLoading && !iaIsInFlight && shouldShowEmpty && (
-              <div className="pd-card-body pd-no-matches">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 20 }}>✅</span>
-                  <p style={{ fontSize: 13.5, color: 'var(--ink2)', margin: 0 }}>No potential infringement matches found.</p>
-                </div>
-                <button className="btn-new" onClick={beginSimilarityAnalysis}>Start Analysis</button>
-              </div>
-            )}
-
-            {/* ── CASE 4: completed / unknown + matches exist ── */}
-            {!analysisLoading && !iaIsInFlight && shouldShowMatches && (
-              <div className="cards-grid">
-                {potentialMatches.map((match, index) => (
-                  <MatchCard
-                    key={index}
-                    match={match}
-                    updatedAt={updatedAt}
-                    onSelect={setSelectedMatch}
-                  />
-                ))}
-              </div>
-            )}
+      {/* ── CASE 4: show matches — always, regardless of analysis status ── */}
+      {shouldShowMatches && (
+        <div className="cards-grid">
+          {potentialMatches.map((match, index) => (
+            <MatchCard
+              key={index}
+              match={match}
+              updatedAt={updatedAt}
+              onSelect={setSelectedMatch}
+            />
+          ))}
+        </div>
+      )}
 
             <div className="pd-action-btns">
               <button className="btn-export" onClick={exportCase}>
@@ -1545,28 +1479,6 @@ const PatentDetailPage = () => {
         }
         .pd-doc-placeholder .pd-doc-label { position: static; font-size: 13px; }
 
-        /* ── Doc loader overlay ── */
-        .pd-doc-loader {
-          position: absolute; inset: 0;
-          display: flex; flex-direction: column;
-          align-items: center; justify-content: center; gap: 8px;
-          background: rgba(250,250,247,0.82);
-          backdrop-filter: blur(4px);
-          z-index: 3;
-        }
-        .pd-doc-spinner {
-          width: 26px; height: 26px;
-          border: 2.5px solid var(--rule2);
-          border-top-color: var(--accent);
-          border-radius: 50%;
-          animation: spin 0.75s linear infinite;
-        }
-        .pd-doc-loader-text {
-          font-family: 'Inconsolata', monospace;
-          font-size: 10px; font-weight: 600;
-          text-transform: uppercase; letter-spacing: 0.10em; color: var(--ink3);
-        }
-
         /* ── No-matches ── */
         .pd-no-matches {
           display: flex; align-items: center; justify-content: space-between;
@@ -1626,6 +1538,12 @@ const PatentDetailPage = () => {
           0%, 100% { opacity: 1; transform: scale(1); }
           50%       { opacity: 0.4; transform: scale(0.75); }
         }
+          .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            align-items: start;  /* ← ADD THIS */
+          }
 
         /* ── Action buttons ── */
         .pd-action-btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
@@ -1650,6 +1568,7 @@ const PatentDetailPage = () => {
           .pd-info-row { flex-direction: column; gap: 4px; }
           .pd-info-label-wrap { width: auto; }
           .pd-doc-inner { width: 6.5rem; height: 8.5rem; }
+          
           .cards-grid { grid-template-columns: 1fr !important; }
           .pd-action-btns { flex-direction: column; }
           .pd-action-btns .btn-export { width: 100%; justify-content: center; }
@@ -1669,6 +1588,7 @@ const PatentDetailPage = () => {
         }
       `}</style>
 
+      {/* ── Infringement match modal (unchanged) ── */}
       {selectedMatch && (
         <InfringementModal
           match={selectedMatch}
@@ -1679,6 +1599,20 @@ const PatentDetailPage = () => {
           onClose={() => setSelectedMatch(null)}
         />
       )}
+
+      {/* ── Document modal — mounts when a thumbnail is clicked ── */}
+      {docModalIndex !== null && caseData?.documents?.[docModalIndex] && (
+        <DocumentModal
+          document={caseData.documents[docModalIndex]}
+          index={docModalIndex}
+          total={caseData.documents.length}
+          onClose={() => setDocModalIndex(null)}
+          onNext={() => setDocModalIndex(i => Math.min(i + 1, caseData.documents.length - 1))}
+          onPrev={() => setDocModalIndex(i => Math.max(i - 1, 0))}
+          fetchBlob={patentApi.proxyDocument}
+        />
+      )}
+
     </div>
   );
 };

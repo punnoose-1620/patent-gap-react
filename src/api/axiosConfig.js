@@ -3,7 +3,7 @@ import axios from 'axios';
 const axiosInstance = axios.create({
   baseURL: 'https://backend-dev.patentgap.ai/api',
   timeout: 600000, // 10 minutes
- // withCredentials: true,          // ← add this
+  //withCredentials: true,          // ← add this
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
