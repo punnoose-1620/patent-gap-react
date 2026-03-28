@@ -32,22 +32,22 @@ export default function HomePage() {
               <div className="eyebrow">The Problem</div>
               <h2 className="serif">The Opportunity in Patent <em>Monitoring</em></h2>
               <div className="opp-text" style={{ marginTop: 26 }}>
-                <p>Large patent portfolios are rarely monitored continuously. The process of identifying potential infringement remains largely manual, time-consuming, and expensive.</p>
-                <p>As a result, many patent holders discover infringement only after significant commercial damage has already occurred.</p>
-                <p>Continuous monitoring creates the opportunity to identify potential infringement earlier and support licensing or enforcement strategies with structured evidence.</p>
+                <p>Most patent portfolios go unmonitored between filing and litigation. Identifying infringement stays manual, slow, and expensive — consuming attorney hours that should go toward enforcement, not research.</p>
+                <p>By the time most patent holders discover infringement, the commercial damage is already done. Revenue has been lost. Leverage has been reduced.</p>
+                <p>Catching infringement earlier changes the outcome. It creates licensing opportunities, strengthens enforcement positions, and gives attorneys the evidence they need before the window closes.</p>
               </div>
             </div>
             <div className="opp-cards reveal d1">
               <div className="opp-card">
-                <span className="opp-card-val">Manual</span>
+                <span className="opp-card-val">Still Manual</span>
                 <span className="opp-card-desc">The infringement identification process remains largely manual — skilled attorney hours spent on work that scales poorly across large portfolios.</span>
               </div>
               <div className="opp-card">
-                <span className="opp-card-val">Delayed</span>
+                <span className="opp-card-val">Too Late</span>
                 <span className="opp-card-desc">Many patent holders discover infringement only after significant commercial damage has occurred — often years too late to act effectively.</span>
               </div>
               <div className="opp-card">
-                <span className="opp-card-val">Earlier</span>
+                <span className="opp-card-val">Act Earlier</span>
                 <span className="opp-card-desc">Continuous monitoring enables earlier detection, supporting licensing and enforcement strategies with structured, documented evidence.</span>
               </div>
             </div>
@@ -61,7 +61,7 @@ export default function HomePage() {
           <div className="how-header reveal">
             <div className="eyebrow">Process</div>
             <h2 className="serif">How Patent Gap AI <em>Works</em></h2>
-            <p>A structured four-step process that takes patent claims from analysis through to attorney-reviewed findings — continuously and at scale.</p>
+            <p>From patent number to attorney-ready findings in four steps — running continuously, so you know about infringement before your competitors know you've noticed.</p>
           </div>
           <div className="steps">
             <div className="step reveal">
@@ -142,12 +142,12 @@ export default function HomePage() {
           <div className="ai-header two-col" style={{ marginBottom: 60 }}>
             <div className="reveal">
               <div className="eyebrow">Technology</div>
-              <h2 className="serif">AI Infrastructure for Patent <em>Intelligence</em></h2>
+              <h2 className="serif">The Platform Behind Your Patent <em>Protection</em></h2>
             </div>
             <div className="ai-desc reveal d1">
-              <p>Recent advances in large language models have made it possible to interpret complex patent claim language with significantly greater precision.</p>
-              <p>Patent Gap AI combines these advances with structured patent data and domain-specific workflows to support continuous patent monitoring.</p>
-              <p>The platform focuses on assisting professionals with identifying relevant signals, organizing evidence, and improving visibility into potential infringement risks.</p>
+              <p>Patent claim language is precise, technical, and deliberately complex. Until recently, interpreting it at scale required senior attorney hours on every search.</p>
+              <p>Patent Gap AI uses modern language models trained on patent data to read claims the way attorneys do — and then runs that analysis continuously across your entire portfolio.</p>
+              <p>The result is a live view of your portfolio's exposure: which claims are at risk, which sources are overlapping, and which findings are ready for legal review right now.</p>
             </div>
           </div>
           <div className="ai-pillars">
@@ -157,8 +157,8 @@ export default function HomePage() {
                   <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
                 </svg>
               </div>
-              <div className="ap-title">Large Language Models</div>
-              <p className="ap-body">State-of-the-art LLMs interpret complex patent claim language with precision previously achievable only through expert human analysis.</p>
+              <div className="ap-title">Reads Claims Like an Attorney</div>
+              <p className="ap-body">Our platform interprets patent claim language at the element level — the same granularity a skilled attorney uses — and applies that analysis across your full portfolio automatically.</p>
             </div>
             <div className="ai-pillar reveal d1">
               <div className="ap-icon">
@@ -166,8 +166,8 @@ export default function HomePage() {
                   <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
                 </svg>
               </div>
-              <div className="ap-title">Structured Patent Data</div>
-              <p className="ap-body">Domain-specific data pipelines process public patent databases and technology disclosures to surface relevant monitoring signals.</p>
+              <div className="ap-title">Connected to Public Patent Data</div>
+              <p className="ap-body">USPTO filings, Espacenet, and public product disclosures are scanned continuously. When something overlaps with your claims, you see it — with the source citation already attached.</p>
             </div>
             <div className="ai-pillar reveal d2">
               <div className="ap-icon">
@@ -175,8 +175,8 @@ export default function HomePage() {
                   <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
                 </svg>
               </div>
-              <div className="ap-title">Continuous Monitoring</div>
-              <p className="ap-body">Automated pipelines scan public technology signals on an ongoing basis, so patent holders don't need to wait for periodic manual reviews.</p>
+              <div className="ap-title">Always On, Not One-Off</div>
+              <p className="ap-body">Infringement doesn't happen on a schedule. Your monitoring shouldn't either. Patent Gap AI runs continuously so new filings and product launches are caught as they happen, not at the next quarterly review.</p>
             </div>
           </div>
         </div>
@@ -234,7 +234,7 @@ export default function HomePage() {
             <Link to="/request-demo" className="btn-cta-white">Request Early Access</Link>
             <Link to="/contact" className="btn-cta-outline">Contact Us</Link>
           </div>
-          <p className="cta-sub">Structured patent monitoring for serious enforcement teams.</p>
+         <p className="cta-sub">Know what's infringing your patents. Know it now, not after the damage is done.</p>
         </div>
       </section>
 

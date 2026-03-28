@@ -11,24 +11,21 @@ const HeroCarousel = () => {
     {
       title: 'Patent Gap AI Inc.',
       subtitle: 'Building the Global Standard',
-      description:
-        'For proactive patent infringement detection powered by cutting-edge artificial intelligence',
+      description: 'Detect patent infringement before it reaches litigation. Claim-level AI analysis maps your patents against public filings and live products — delivering attorney-ready findings in minutes, not months.',
       icon: Shield,
       color: 'from-emerald-400 to-teal-500',
     },
     {
       title: 'AI-Powered Detection',
       subtitle: 'Real-Time Patent Monitoring',
-      description:
-        'Advanced machine learning algorithms continuously scan and analyze patents to detect potential infringements before they become costly',
+      description: 'Every claim in your portfolio is continuously matched against USPTO filings, Espacenet, and live product data. When overlap is detected, you get a structured report — not a raw data dump.',
       icon: Eye,
       color: 'from-green-400 to-emerald-500',
     },
     {
       title: 'Proactive Protection',
       subtitle: 'Stay Ahead of Infringement',
-      description:
-        'Leverage neural networks and predictive analytics to safeguard your intellectual property with unprecedented accuracy',
+      description: 'Stop reacting to infringement after the damage is done. Patent Gap AI monitors your portfolio 24/7 and surfaces potential violations with claim-by-claim evidence chains ready for legal review.',
       icon: AlertCircle,
       color: 'from-teal-400 to-cyan-500',
     },
@@ -565,11 +562,11 @@ const HeroCarousel = () => {
                 <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
                   <button className="px-6 md:px-8 lg:px-10 py-3 md:py-3.5 lg:py-4 rounded-full font-bold text-sm md:text-base text-black bg-linear-to-r from-emerald-400 to-green-500 hover:from-emerald-500 hover:to-green-600 transition-all duration-300 shadow-lg transform hover:scale-105"
                           style={{ boxShadow: '0 0 30px rgba(16,185,129,0.6)' }}>
-                    Get Started
+                    Analyse My Patents
                   </button>
                   <button className="px-6 md:px-8 lg:px-10 py-3 md:py-3.5 lg:py-4 rounded-full font-bold text-sm md:text-base text-emerald-400 border-2 border-emerald-400 hover:bg-emerald-400/10 transition-all duration-300 transform hover:scale-105"
                           style={{ boxShadow: '0 0 20px rgba(16,185,129,0.3)' }}>
-                    Learn More
+                    See a Sample Report
                   </button>
                 </div>
               </div>

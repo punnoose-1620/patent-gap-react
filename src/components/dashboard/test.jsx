@@ -21,10 +21,9 @@ function formatLocalDateInputValue(date) {
 // ─── Step 1: Upload Patent ────────────────────────────────────────────────────
 
 const UploadPatentStep = ({ onClose, onContinue }) => {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab]               = useState('upload');
   const [projectName, setProjectName]           = useState('');
-  const [localPatentId, setLocalPatentId]       = useState('');
+  //const [projectDescription, setProjectDescription] = useState('');
   const [projectKeywords, setProjectKeywords]   = useState('');
   const [filingDate, setFilingDate]             = useState('');
   const [currentStatus, setCurrentStatus]       = useState('Processing');
@@ -74,23 +73,15 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
             console.warn('Summary generation failed, continuing anyway', e);
           }
         }
-        // ✅ Patent ID flow: close modal and go directly to patent detail
-        onClose();
-        navigate(`/patent-detail?id=${data.case_id}`);
+        onContinue({ projectName, activeTab, patentNumber, caseDetails, caseId: data.case_id });
       } else {
-        // ✅ FIX: pass ALL upload-tab fields through to Step 2
-        onContinue({
-          projectName,
-          activeTab,
-          file: selectedFile,
-          caseDetails: null,
-          caseId: null,
-          patentId: localPatentId.trim() ? `local_${localPatentId.trim()}` : '',
-          inventors: inventors.trim(),
-          keywords: projectKeywords.trim(),
-          filingDate,
-          currentStatus,
-        });
+        //onContinue({ projectName, activeTab, file: selectedFile, caseDetails: null, caseId: null });
+        onContinue({ projectName, activeTab, file, caseDetails: null, caseId: null,
+            inventors: inventors.trim(),
+            keywords: projectKeywords.trim(),
+            filingDate,
+            currentStatus,
+          })
       }
     } catch (err) {
       setError(err?.message || 'Failed to fetch patent. Please try again.');
@@ -163,32 +154,6 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
           ))}
         </div>
 
-        {/* Patent ID — upload tab only */}
-        {activeTab === 'upload' && (
-          <div className="pm-field">
-            <label className="pm-label">Patent ID</label>
-            <div style={{ position: 'relative' }}>
-              <span style={{
-                position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
-                fontFamily: "'Inconsolata', monospace", fontSize: 13.5,
-                color: 'var(--accent, #2E7D32)', fontWeight: 700,
-                pointerEvents: 'none', userSelect: 'none',
-              }}>
-                local_
-              </span>
-              <input
-                type="text"
-                value={localPatentId}
-                onChange={e => setLocalPatentId(e.target.value)}
-                placeholder="US1234"
-                className="pm-input pm-mono"
-                style={{ paddingLeft: 60 }}
-              />
-            </div>
-            <p className="pm-hint">Stored as <code style={{ fontFamily: 'Inconsolata, monospace', fontSize: 11, color: 'var(--accent)' }}>local_{localPatentId || 'US1234'}</code></p>
-          </div>
-        )}
-
         {/* Upload Tab */}
         {activeTab === 'upload' && (
           <div>
@@ -214,6 +179,18 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
                 <button className="pm-file-remove" onClick={() => setSelectedFile(null)}>×</button>
               </div>
             )}
+
+            {/*<div className="pm-field" style={{ marginTop: 16 }}>
+              <label className="pm-label">Project Description</label>
+              <input
+                type="text"
+                value={projectDescription}
+                onChange={e => setProjectDescription(e.target.value)}
+                placeholder="Describe the project for infringement context"
+                className="pm-input"
+              />
+            </div>
+            */}
 
             <div className="pm-field">
               <label className="pm-label">Keywords</label>
@@ -368,21 +345,13 @@ const AddContextStep = ({ step1Data, onBack, onClose, onSuccess }) => {
       let caseId = step1Data.caseId;
 
       if (!caseId) {
-        // ✅ FIX: include all Step 1 fields when creating the patent record
         const caseDetails = {
           ...(step1Data.caseDetails || {}),
           title: step1Data.projectName,
           description: context,
-          // fields collected in the upload tab
-          _id: step1Data.patentId || '',
-          inventors: step1Data.inventors || '',
-          keywords: step1Data.keywords || '',
-          filing_date: step1Data.filingDate || '',
-          status: step1Data.currentStatus || '',
         };
-        console.log('🚀 [Start Analysis] caseDetails before API call:', caseDetails);
-        console.log('🚀 [Start Analysis] file before API call:', step1Data.file);
-        const created = await patentApi.createPatent(caseDetails, step1Data.file);
+        console.log("Start Analysis data",caseDetails);
+        const created = await patentApi.createPatent(caseDetails);
         caseId = created.case_id;
         if (created.case_data) dispatch(addPatent(created.case_data));
       } else {
@@ -474,49 +443,6 @@ const AddContextStep = ({ step1Data, onBack, onClose, onSuccess }) => {
             {step1Data?.caseDetails?._id || step1Data?.patentNumber || step1Data?.file?.name || '—'}
           </div>
         </div>
-
-        {/* ✅ Summary of passed-through fields (upload tab only) — visual confirmation */}
-        {step1Data?.activeTab === 'upload' && (
-          step1Data.inventors || step1Data.keywords || step1Data.filingDate
-        ) && (
-          <div className="pm-field">
-            <label className="pm-label">Captured Details</label>
-            <div style={{
-              background: 'var(--surf, #F5F2EC)',
-              border: '1px solid var(--rule, rgba(13,40,24,0.09))',
-              borderRadius: 9,
-              padding: '10px 13px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-            }}>
-              {step1Data.inventors && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ fontFamily: 'Inconsolata, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink3)', flexShrink: 0, width: 64 }}>Inventors</span>
-                  <span style={{ fontFamily: 'Jost, sans-serif', fontSize: 13, color: 'var(--ink2)' }}>{step1Data.inventors}</span>
-                </div>
-              )}
-              {step1Data.keywords && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ fontFamily: 'Inconsolata, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink3)', flexShrink: 0, width: 64 }}>Keywords</span>
-                  <span style={{ fontFamily: 'Jost, sans-serif', fontSize: 13, color: 'var(--ink2)' }}>{step1Data.keywords}</span>
-                </div>
-              )}
-              {step1Data.filingDate && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ fontFamily: 'Inconsolata, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink3)', flexShrink: 0, width: 64 }}>Filed</span>
-                  <span style={{ fontFamily: 'Inconsolata, monospace', fontSize: 13, color: 'var(--ink2)' }}>{step1Data.filingDate}</span>
-                </div>
-              )}
-              {step1Data.currentStatus && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ fontFamily: 'Inconsolata, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink3)', flexShrink: 0, width: 64 }}>Status</span>
-                  <span style={{ fontFamily: 'Jost, sans-serif', fontSize: 13, color: 'var(--ink2)' }}>{step1Data.currentStatus}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Context textarea */}
         <div className="pm-field">
@@ -646,6 +572,7 @@ const ProjectModal = ({ isOpen, onClose }) => {
           box-shadow: 0 24px 80px rgba(13,40,24,0.22), 0 4px 16px rgba(13,40,24,0.10);
           width: 100%;
           max-width: 560px;
+          /* KEY FIX: never taller than viewport minus padding */
           max-height: calc(100vh - 32px);
           display: flex;
           flex-direction: column;
@@ -787,6 +714,7 @@ const ProjectModal = ({ isOpen, onClose }) => {
           display: flex;
           flex-direction: column;
           gap: 0;
+          /* custom scrollbar */
           scrollbar-width: thin;
           scrollbar-color: rgba(46,125,50,0.25) transparent;
         }
@@ -1205,6 +1133,9 @@ const ProjectModal = ({ isOpen, onClose }) => {
           to   { transform: rotate(360deg); }
         }
 
+        /* ══════════════
+           RESPONSIVE
+        ══════════════ */
         @media (max-width: 599px) {
           .pm-overlay { padding: 0; align-items: flex-end; }
           .pm-shell {

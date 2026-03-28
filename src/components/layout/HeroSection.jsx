@@ -524,18 +524,20 @@ export default function HeroSection() {
         <div className="hero-content">
           <div className="hero-badge">
             <div className="badge-dot" />
-            <span>AI-Powered · Claim-Level · Built for IP Attorneys</span>
+            <span>Claim-Level Detection · Attorney-Ready · USPTO-Connected</span>
           </div>
           <h1 className="hero-h1">
-            Continuous<br />Patent<br />Infringement<br /><em>Monitoring</em>
-          </h1>
+          Detect Patent<br />Infringement<br />Before It Reaches<br /><em>Litigation</em>
+        </h1>
           <p className="hero-sub">
-            AI-powered infrastructure that helps patent professionals detect and
-            document potential patent infringement using publicly available data.
-          </p>
+          Detect and document potential patent infringement using claim-level
+          AI analysis on public data — and get attorney-ready findings in minutes,
+          not months.
+        </p>
           <p className="hero-support">
-            Built with patent attorneys and designed for real-world IP enforcement workflows.
-          </p>
+          Every finding is traceable to a specific claim, a specific source, and a
+          specific risk level — structured for immediate legal review.
+        </p>
           <div className="hero-btns">
             <Link to="/request-demo" className="btn-green">
               Request Demo
