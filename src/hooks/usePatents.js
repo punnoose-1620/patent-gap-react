@@ -13,7 +13,8 @@ export const usePatents = () => {
   // ✅ Wrapped in useCallback — stable reference, won't cause infinite loops
   const loadPatents = useCallback(async () => {
     try {
-      const cases = await patentApi.getAllCases();
+      //const cases = await patentApi.getAllCases();
+      const cases = await patentApi.getMyCases();
       dispatch(setPatents(cases));
 
       const calculatedStats = {
