@@ -27,19 +27,17 @@ const formatFileSize = (bytes) => {
 
 // ─── PDF Viewer ───────────────────────────────────────────────
 const PdfViewer = ({ objectUrl, fileName }) => {
-  const [page,     setPage]     = useState(1);
   const [zoom,     setZoom]     = useState(1);
   const [rotate,   setRotate]   = useState(0);
   const [loading,  setLoading]  = useState(true);
   const iframeRef = useRef(null);
 
-  const zoomIn  = () => setZoom(z => Math.min(z + 0.25, 3));
-  const zoomOut = () => setZoom(z => Math.max(z - 0.25, 0.5));
+  const zoomIn   = () => setZoom(z => Math.min(z + 0.25, 3));
+  const zoomOut  = () => setZoom(z => Math.max(z - 0.25, 0.5));
   const rotateCw = () => setRotate(r => (r + 90) % 360);
 
   return (
     <div className="dm-pdf-wrap">
-      {/* PDF toolbar */}
       <div className="dm-pdf-toolbar">
         <div className="dm-pdf-toolbar-left">
           <span className="dm-mono dm-filename">{fileName}</span>
@@ -53,7 +51,6 @@ const PdfViewer = ({ objectUrl, fileName }) => {
         </div>
       </div>
 
-      {/* PDF frame */}
       <div className="dm-pdf-frame-wrap" style={{ overflow: 'auto', flex: 1 }}>
         {loading && (
           <div className="dm-center-msg">
@@ -85,7 +82,6 @@ const PdfViewer = ({ objectUrl, fileName }) => {
 // ─── Text / XML Viewer ────────────────────────────────────────
 const TextViewer = ({ content, fileName }) => {
   const ext = getFileExtension(fileName);
-
   return (
     <div className="dm-text-wrap">
       <div className="dm-text-header">
@@ -103,7 +99,6 @@ const TextViewer = ({ content, fileName }) => {
 const ImageViewer = ({ objectUrl, fileName }) => {
   const [zoom,   setZoom]   = useState(1);
   const [rotate, setRotate] = useState(0);
-
   return (
     <div className="dm-img-wrap">
       <div className="dm-pdf-toolbar">
@@ -152,31 +147,38 @@ const UnknownViewer = ({ fileName, objectUrl, onDownload }) => (
 // ─── Main DocumentModal ───────────────────────────────────────
 /**
  * Props:
- *   document   – { url, source, title? }  (the doc object from caseData.documents[i])
+ *   doc        – { url, source, title?, size?, type? }  ← renamed from 'document' to avoid
+ *                conflict with browser's window.document global
  *   index      – number (0-based doc index)
  *   total      – number (total docs in case)
  *   onClose    – () => void
- *   onNext     – () => void  (navigate to next doc)
- *   onPrev     – () => void  (navigate to prev doc)
- *   fetchBlob  – async (url) => Blob  (the patentApi.proxyDocument call)
+ *   onNext     – () => void
+ *   onPrev     – () => void
+ *   fetchBlob  – async (doc) => Blob  ← receives full doc object, not just url
  */
-const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchBlob }) => {
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState(null);
-  const [objectUrl,  setObjectUrl]  = useState(null);
-  const [textContent,setTextContent]= useState(null);
-  const [fileSize,   setFileSize]   = useState(null);
+const DocumentModal = ({ doc, index, total, onClose, onNext, onPrev, fetchBlob }) => {
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
+  const [objectUrl,   setObjectUrl]   = useState(null);
+  const [textContent, setTextContent] = useState(null);
+  const [fileSize,    setFileSize]    = useState(null);
 
-  const url      = document?.url      || '';
-  const fileName = url.split('/').pop() || `document-${index + 1}`;
-  const fileType = getFileType(url);
-  const ext      = getFileExtension(url);
+  // ── Derive display values from doc (not from window.document) ──
+  const url      = doc?.url      || '';
+  const source   = doc?.source   || '';
+  const title    = doc?.title    || '';
+
+  // For local docs the url is "documents/<uuid>" with no extension
+  // so derive fileName from title if available, fallback to last url segment
+  const fileName = title || url.split('/').pop() || `document-${index + 1}`;
+  const fileType = getFileType(fileName);   // use fileName not url for extension
+  const ext      = getFileExtension(fileName);
 
   // ── Fetch the doc blob on mount / when doc changes ──
   useEffect(() => {
     if (!url) return;
-    let alive    = true;
-    let blobUrl  = null;
+    let alive   = true;
+    let blobUrl = null;
 
     const load = async () => {
       setLoading(true);
@@ -186,7 +188,8 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
       setFileSize(null);
 
       try {
-        const blob = await fetchBlob(url);
+        // ── FIX: pass the whole doc object so fetchBlob can route by source ──
+        const blob = await fetchBlob(doc);
         if (!alive) return;
 
         setFileSize(blob.size);
@@ -213,7 +216,7 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
       alive = false;
       if (blobUrl) URL.revokeObjectURL(blobUrl);
     };
-  }, [url, fileType, fetchBlob]);
+  }, [url, fileType, fetchBlob]);  // url changing = doc changed
 
   // ── Keyboard navigation ──
   useEffect(() => {
@@ -233,6 +236,7 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
   }, []);
 
   // ── Download handler ──
+  // ── FIX: use window.document explicitly to avoid shadowing ──
   const handleDownload = () => {
     if (!objectUrl && !textContent) return;
     const a    = window.document.createElement('a');
@@ -300,15 +304,15 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
         {/* ── Modal header ── */}
         <header className="dm-header">
           <div className="dm-header-left">
-            {/* Doc type badge */}
-            <span className="dm-ext-badge dm-ext-badge--lg">.{ext}</span>
+            <span className="dm-ext-badge dm-ext-badge--lg">.{ext || 'doc'}</span>
 
             <div className="dm-header-meta">
               <span className="dm-header-title">{fileName}</span>
               <div className="dm-header-sub">
-                {document?.source && (
+                {/* ── FIX: use source variable, not doc?.source (avoids any shadowing) ── */}
+                {source && (
                   <span className="dm-mono dm-muted">
-                    Source: {document.source === 'uspto' ? 'US Patent Office' : document.source}
+                    Source: {source === 'uspto' ? 'US Patent Office' : source}
                   </span>
                 )}
                 {fileSize && <span className="dm-mono dm-muted">{formatFileSize(fileSize)}</span>}
@@ -320,7 +324,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           </div>
 
           <div className="dm-header-right">
-            {/* Download */}
             {(objectUrl || textContent) && (
               <button className="dm-action-btn" onClick={handleDownload} title="Download">
                 <Download size={14} />
@@ -328,7 +331,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
               </button>
             )}
 
-            {/* Open in new tab */}
             {objectUrl && fileType !== 'pdf' && (
               <button className="dm-action-btn" onClick={handleOpenExternal} title="Open in new tab">
                 <ExternalLink size={14} />
@@ -336,7 +338,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
               </button>
             )}
 
-            {/* Close */}
             <button className="dm-close-btn" onClick={onClose} title="Close (Esc)" aria-label="Close document viewer">
               <X size={16} />
             </button>
@@ -361,7 +362,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
               <span className="dm-action-label">Previous</span>
             </button>
 
-            {/* Pagination dots */}
             <div className="dm-page-dots">
               {Array.from({ length: total }, (_, i) => (
                 <div
@@ -386,7 +386,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
       </div>
 
       <style>{`
-        /* ── Backdrop ── */
         .dm-backdrop {
           position: fixed; inset: 0;
           background: rgba(10, 10, 8, 0.62);
@@ -396,7 +395,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           animation: dm-fade-in 0.18s ease;
         }
 
-        /* ── Shell ── */
         .dm-shell {
           position: fixed;
           inset: 0;
@@ -426,7 +424,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1); }
         }
 
-        /* ── Header ── */
         .dm-header {
           display: flex;
           align-items: center;
@@ -471,7 +468,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           flex-shrink: 0;
         }
 
-        /* ── Extension badge ── */
         .dm-ext-badge {
           font-family: 'Inconsolata', monospace;
           font-size: 9px;
@@ -490,7 +486,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           padding: 3px 9px;
         }
 
-        /* ── Action buttons ── */
         .dm-action-btn {
           display: inline-flex;
           align-items: center;
@@ -514,7 +509,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           color: var(--accent, #16a34a);
         }
 
-        /* ── Close button ── */
         .dm-close-btn {
           display: inline-flex;
           align-items: center;
@@ -534,7 +528,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           color: var(--red, #b91c1c);
         }
 
-        /* ── Body ── */
         .dm-body {
           flex: 1;
           overflow: hidden;
@@ -544,7 +537,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           min-height: 0;
         }
 
-        /* ── PDF viewer ── */
         .dm-pdf-wrap {
           display: flex;
           flex-direction: column;
@@ -574,7 +566,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           min-height: 0;
         }
 
-        /* ── Image viewer ── */
         .dm-img-wrap {
           display: flex;
           flex-direction: column;
@@ -589,7 +580,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           padding: 24px;
         }
 
-        /* ── Text viewer ── */
         .dm-text-wrap {
           display: flex;
           flex-direction: column;
@@ -620,7 +610,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           tab-size: 2;
         }
 
-        /* ── Control button (zoom / rotate) ── */
         .dm-ctrl-btn {
           display: inline-flex;
           align-items: center;
@@ -639,7 +628,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           color: var(--accent, #16a34a);
         }
 
-        /* ── Shared utility ── */
         .dm-mono {
           font-family: 'Inconsolata', monospace;
           font-size: 10px;
@@ -669,7 +657,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           margin: 0 2px;
         }
 
-        /* ── Centered message (loading / error / unknown) ── */
         .dm-center-msg {
           display: flex;
           flex-direction: column;
@@ -695,7 +682,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
         }
         .dm-error-icon { margin-bottom: 4px; }
 
-        /* ── Spinner ── */
         .dm-spinner {
           width: 34px; height: 34px;
           border: 3px solid var(--rule2, rgba(0,0,0,0.10));
@@ -705,7 +691,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
         }
         @keyframes dm-spin { to { transform: rotate(360deg); } }
 
-        /* ── Footer navigation ── */
         .dm-footer {
           display: flex;
           align-items: center;
@@ -743,7 +728,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           cursor: not-allowed;
         }
 
-        /* ── Pagination dots ── */
         .dm-page-dots {
           display: flex;
           align-items: center;
@@ -762,7 +746,6 @@ const DocumentModal = ({ document, index, total, onClose, onNext, onPrev, fetchB
           border-radius: 3px;
         }
 
-        /* ── Responsive ── */
         @media (max-width: 640px) {
           .dm-shell {
             top: 0; left: 0; right: 0; bottom: 0;
