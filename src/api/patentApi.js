@@ -27,6 +27,15 @@ export const patentApi = {
     }
   },
 
+  getMyCases: async () => {
+    try {
+      const { data } = await axiosInstance.get('/my-cases');
+      return data.cases || [];
+    } catch (error) {
+      apiError(error, 'Failed to fetch cases');
+    }
+  },
+
   getCaseById: async (caseId) => {
     try {
       const { data } = await axiosInstance.get(`/cases/${caseId}`);
@@ -67,13 +76,67 @@ export const patentApi = {
   },
 
   createPatent: async (caseDetails) => {
+  try {
+    const { data } = await axiosInstance.post('/create-patent', caseDetails);
+    if (!data.case_id) throw new Error('Failed to create case');
+    return data; // no file_uploaded flag needed anymore
+  } catch (error) {
+    apiError(error, 'Failed to create patent');
+  }
+},
+
+  // ── BUG 4 FIX ─────────────────────────────────────────────────────────────
+  // Previously the file was appended under the key 'documents', but the server
+  // endpoint /upload-file-to-local-storage reads req.files['file']. Changed the
+  // FormData field name from 'documents' to 'file' to match the server expectation.
+  uploadFileToCase: async (caseId, file) => {
     try {
-      console.log('📋 createPatent payload:', caseDetails);
-      const { data } = await axiosInstance.post('/create-patent', caseDetails);
-      if (!data.case_id) throw new Error('Failed to create case');
+      const formData = new FormData();
+      formData.append('file', file); 
+      const { data } = await axiosInstance.post(
+        `/upload-file-to-local-storage/${caseId}`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
       return data;
     } catch (error) {
-      apiError(error, 'Failed to create patent');
+      console.warn('File upload to local storage failed:', error.message);
+      throw error;
+    }
+  },
+
+  /*uploadFileToCase: async (caseId, file) => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(
+      `/upload-file-to-local-storage/${encodeURIComponent(caseId)}`,
+      {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.message || res.statusText || 'Upload failed');
+    }
+    return data;
+  } catch (error) {
+    console.warn('File upload failed:', error.message);
+    throw error;
+  }
+},*/
+
+  triggerSimilarityAnalysis: async (caseId, keywords) => {
+    try {
+      const { data } = await axiosInstance.post('/trigger-similarity-analysis', {
+        case_id: caseId,
+        keywords: keywords || [],
+      });
+      return data;
+    } catch (error) {
+      console.warn('Similarity analysis trigger failed (non-blocking):', error.message);
     }
   },
 
@@ -97,22 +160,19 @@ export const patentApi = {
     }
   },
 
-  // ── FIX: documentUrls param added back — was missing, causing
-  //         all subsequent args (context, country, claims, owners)
-  //         to silently receive the wrong values.
-  // ────────────────────────────────────────────────────────────
-  /*getInfringementAnalysis: async (
+  getInfringementAnalysis: async (
     caseId,
     keywords,
-    documentUrls,   // ← was missing in the broken version
+    documentUrls,
     context,
     country,
     claims,
-    owners
+    owners,
+    signal
   ) => {
     const payload = {
       keywords:      keywords     || [],
-      document_urls: documentUrls || [],   // ← was being skipped entirely
+      document_urls: documentUrls || [],
       context:       context      || '',
       country:       country      || 'US',
       claims:        claims       || [],
@@ -125,62 +185,26 @@ export const patentApi = {
     try {
       const { data } = await axiosInstance.post(
         `/similarity-analysis-live/${caseId}`,
-        payload
+        payload,
+        { signal }
       );
       return data;
     } catch (error) {
       apiError(error, 'Failed to get infringement analysis');
     }
-  },*/
-  getInfringementAnalysis: async (
-  caseId,
-  keywords,
-  documentUrls,
-  context,
-  country,
-  claims,
-  owners,
-  signal        // ← add this
-) => {
-  const payload = {
-    keywords:      keywords     || [],
-    document_urls: documentUrls || [],
-    context:       context      || '',
-    country:       country      || 'US',
-    claims:        claims       || [],
-    owners:        owners       || [],
-  };
+  },
 
-  console.log('📤 Payload being sent to /similarity-analysis-live:',
-    JSON.stringify(payload, null, 2));
-
-  try {
-    const { data } = await axiosInstance.post(
-      `/similarity-analysis-live/${caseId}`,
-      payload,
-      { signal }   // ← add this (axios supports AbortSignal since v0.22)
-    );
-    return data;
-  } catch (error) {
-    apiError(error, 'Failed to get infringement analysis');
-  }
-},
-
-  // ── FIX: POST → PUT for semantic correctness.
-  //         If your backend only accepts POST for updates,
-  //         revert this one line back to .post()
-  // ────────────────────────────────────────────────────────────
   updateCase: async (caseId, updateData) => {
-  try {
-    const payload = { _id: caseId, ...updateData };  // ← ADD THIS
-    console.log('📝 updateCase called:', { caseId, payload });
-    const { data } = await axiosInstance.post(`/update-patent`, payload);
-    if (!data.success) throw new Error(data.message || 'Failed to update case');
-    return data;
-  } catch (error) {
-    apiError(error, 'Failed to update case');
-  }
-},
+    try {
+      const payload = { _id: caseId, ...updateData };
+      console.log('📝 updateCase called:', { caseId, payload });
+      const { data } = await axiosInstance.post(`/update-patent`, payload);
+      if (!data.success) throw new Error(data.message || 'Failed to update case');
+      return data;
+    } catch (error) {
+      apiError(error, 'Failed to update case');
+    }
+  },
 
   deleteCase: async (caseId) => {
     try {
@@ -215,6 +239,26 @@ export const patentApi = {
       return data;
     } catch (error) {
       apiError(error, 'Failed to open document');
+    }
+  },
+
+  /*getDocumentById: async (documentId) => {
+  try {
+    const { data } = await axiosInstance.get(`/document/${documentId}`, {
+      responseType: 'blob'
+    });
+    return data;
+  } catch (error) {
+    apiError(error, 'Failed to fetch local document');
+  }
+},*/
+
+  getDocumentStream: async (url) => {
+    try {
+      const { data } = await axiosInstance.get(url, { responseType: 'blob' });
+      return data;
+    } catch (error) {
+      apiError(error, 'Failed to stream document');
     }
   },
 };
