@@ -721,6 +721,8 @@ const MatchCard = ({ match, updatedAt, onSelect }) => {
   );
 };
 
+
+
 const PatentDetailPage = () => {
   const location = useLocation();
   const navigate  = useNavigate();
@@ -731,6 +733,32 @@ const PatentDetailPage = () => {
   const caseIdFromUrl = searchParams.get('id');
   const projectData   = location.state || {};
   const caseId        = caseIdFromUrl || projectData.id;
+
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const fileInputRef   = useRef();
+  
+
+  const handleAddDocument = async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    setUploadingDoc(true);
+    const result = await patentApi.uploadFileToCase(caseId, file);
+    if (result) { // ← guard: only add if upload actually returned data
+      setCaseData(prev => ({
+        ...prev,
+        documents: [...(prev?.documents || []), result],
+      }));
+    }
+  } catch (err) {
+    alert(`Upload failed: ${err?.message || 'Unknown error'}`);
+  } finally {
+    setUploadingDoc(false);
+    e.target.value = '';
+  }
+};
+
+  
 
   const [caseData,        setCaseData]        = useState(null);
   const [pageLoading,     setPageLoading]     = useState(true);
@@ -781,6 +809,9 @@ const PatentDetailPage = () => {
     : [];
 
     console.log('🃏 All potential matches:', JSON.stringify(potentialMatches, null, 2));
+
+
+    
 
   /*const iaStatus      = String(infringementAnalysisStatus || '').toLowerCase();
   const iaIsCompleted = iaStatus === 'completed';
@@ -994,9 +1025,22 @@ useEffect(() => {
 
   // ── CHANGED: just sets the modal index — no blob fetch ────────────────── //
   const openDocument = (index) => {
+    const doc    = caseData?.documents?.[index];
+    const source = (doc?.source || '').toLowerCase();
+    const url    = doc?.url || '';
+
+    console.log('📄 Opening doc [' + index + ']:', doc);
+    console.log('📌 source:', source, '| url:', url);
+
+    if (!source.includes('local') && !source.includes('uspto')) {
+      // external — open in new tab
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // local or USPTO — open modal
     setDocModalIndex(index);
   };
-
   if (pageLoading) {
     return (
       <div className="dash-shell">
@@ -1251,10 +1295,36 @@ useEffect(() => {
             title="Documents"
             eyebrow="Files"
             icon={FileText}
+            
             actions={
-              <span className="pcard-num" style={{ margin: 0, color: 'var(--accent)' }}>
-                {documentsCount} doc{documentsCount !== 1 ? 's' : ''}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="pcard-num" style={{ margin: 0, color: 'var(--accent)' }}>
+                  {documentsCount} doc{documentsCount !== 1 ? 's' : ''}
+                </span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={handleAddDocument}
+                />
+                <button
+                  className="btn-new"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingDoc}
+                  style={{ opacity: uploadingDoc ? 0.7 : 1,
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '5px 11px', fontSize: 11 }}
+                >
+                  {uploadingDoc ? (
+                    <><RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> Uploading…</>
+                  ) : (
+                    <><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg> Add Document</>
+                  )}
+                </button>
+              </div>
             }
           >
             <div className="pd-docs-grid">
@@ -1262,7 +1332,8 @@ useEffect(() => {
                 ? caseData.documents.map((doc, i) => {
                     // ── Thumbnail visuals are 100% unchanged ──────────────── //
                     const url            = doc.url || '';
-                    const ext            = url.split('.').pop();
+                    //const ext            = url.split('.').pop();
+                    const ext   = url.split('/').pop().split('.').pop(); // ← use split('/').pop() not split('.')
                     const src            = doc.source || '';
                     const bgImg          = src === 'uspto' ? 'uspto.jpg' : 'local.png';
                     return (
@@ -1675,15 +1746,29 @@ useEffect(() => {
       )}
 
       {/* ── Document modal — mounts when a thumbnail is clicked ── */}
-      {docModalIndex !== null && caseData?.documents?.[docModalIndex] && (
+      {docModalIndex !== null 
+        && caseData?.documents?.[docModalIndex] !== undefined
+        && (
         <DocumentModal
-          document={caseData.documents[docModalIndex]}
+          doc={caseData.documents[docModalIndex]}
           index={docModalIndex}
           total={caseData.documents.length}
           onClose={() => setDocModalIndex(null)}
           onNext={() => setDocModalIndex(i => Math.min(i + 1, caseData.documents.length - 1))}
           onPrev={() => setDocModalIndex(i => Math.max(i - 1, 0))}
-          fetchBlob={patentApi.proxyDocument}
+          fetchBlob={async (doc) => {
+            const source = (doc?.source || '').toLowerCase();
+            const url    = doc?.url || '';
+
+            if (source.includes('local')) {
+              //const baseURL    = axiosInstance.defaults.baseURL || '';
+              return await patentApi.getDocumentStream(`/${url}`);
+            }
+
+            if (source.includes('uspto')) {
+              return await patentApi.proxyDocument(url);
+            }
+          }}
         />
       )}
 
