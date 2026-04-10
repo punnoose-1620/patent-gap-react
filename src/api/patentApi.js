@@ -231,13 +231,19 @@ export const patentApi = {
 
   proxyDocument: async (documentUrl) => {
     try {
+      const { body } = { document_url: documentUrl }
+      const { responseParams } = { responseType: 'blob' }
+      console.log('Proxying document URL:', documentUrl);  
+      console.log('Proxying document Body:', body);
       const { data } = await axiosInstance.post(
         '/proxy-document',
-        { document_url: documentUrl },
-        { responseType: 'blob' }
+        body,
+        responseParams
       );
       return data;
     } catch (error) {
+       console.warn('Proxy document failed:', error.message);
+       console.warn('Complete Error Message:', error);
       apiError(error, 'Failed to open document');
     }
   },
