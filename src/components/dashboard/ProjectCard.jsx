@@ -3,46 +3,6 @@ import { useNavigate } from 'react-router-dom';
 const AnalysisStatusIcon = ({ status }) => {
   const s = String(status || '').toLowerCase();
 
- /* if (s === 'completed') {
-    return (
-      <span title="Analysis complete" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(46,125,50,0.12)', flexShrink: 0 }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      </span>
-    );
-  }
-
-  if (s === 'pending' || s === 'processing' || s === 'running' || s === 'queued' || s === 'in_progress') {
-    return (
-      <span title={`Analysis ${s}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(180,83,9,0.12)', flexShrink: 0 }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B45309" strokeWidth="2.5" strokeLinecap="round" style={{ animation: 'spin 1.2s linear infinite' }}>
-          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-        </svg>
-      </span>
-    );
-  }
-
-  if (s === 'failed' || s === 'error') {
-    return (
-      <span title="Analysis failed" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(185,28,28,0.10)', flexShrink: 0 }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </span>
-    );
-  }*/
-
-  // unknown / none / not started
- /* return (
-    <span title="Analysis not started" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(140,140,132,0.10)', flexShrink: 0 }}>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8C8C84" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="12" y1="8" x2="12" y2="12"/>
-        <line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-    </span>
-  );*/
   if (s === 'started') {
     return (
       <span title="Infringement analysis incomplete" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(185,28,28,0.10)', flexShrink: 0 }}>
@@ -73,6 +33,7 @@ const ProjectCard = ({
   progress = 0,
   infringementAnalysisStatus = 'unknown',
   riskLevel = 'low',
+  hasUpdates,
 }) => {
   const navigate = useNavigate();
 
@@ -100,15 +61,16 @@ const ProjectCard = ({
 
   return (
     <div onClick={handleCardClick} className="pcard" style={{ cursor: 'pointer' }}>
-      {/* ── Top row: badge + analysis status icon + ext button ── */}
-      <div className="pcard-top">
+
+            <div className="pcard-top" style={{ flexWrap: 'wrap', gap: 4 }}>
+        {/* ── Left: status + risk badges ── */}
         <span className={`pcard-badge ${badgeClass}`}>
           <span className="pcard-dot" />
           {badgeLabel}
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {riskLevel === 'high' && (
-          <span className="pcard-badge expired" style={{ marginLeft: 'auto' }}>
+
+        {riskLevel === 'high' && (
+          <span className="pcard-badge expired">
             <span className="pcard-dot" />
             High Risk
           </span>
@@ -119,7 +81,43 @@ const ProjectCard = ({
             Med Risk
           </span>
         )}
+
+        {/* ── Right: NEW + analysis icon + ext button — always pinned to the right ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
           <AnalysisStatusIcon status={infringementAnalysisStatus} />
+
+          {hasUpdates && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                color: '#fff',
+                fontSize: 8,
+                fontFamily: "'Inconsolata', monospace",
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.14em',
+                padding: '3px 7px 3px 5px',
+                borderRadius: 4,
+                flexShrink: 0,
+                boxShadow: '0 1px 4px rgba(22,163,74,0.35)',
+              }}
+            >
+              <span style={{
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: '#fff',
+                opacity: 0.9,
+                animation: 'ia-pulse 1.2s ease-in-out infinite',
+                flexShrink: 0,
+              }} />
+              Updates
+            </span>
+          )}
+
           <button
             className="card-ext"
             aria-label="Open"
@@ -144,31 +142,31 @@ const ProjectCard = ({
       </div>
 
       <div className="pcard-progress">
-      {pct > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{
-            fontFamily: "'Inconsolata', monospace", fontSize: 9,
-            textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)',
-          }}>
-            Overlap Score
-          </span>
-          <span style={{
-            fontFamily: "'Libre Baskerville', serif", fontSize: 13, fontWeight: 700,
-            color: isExpired ? 'var(--red)' : isAbandoned ? 'var(--ink3)' : 'var(--accent)',
-          }}>
-            {pct}%
-          </span>
+        {pct > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{
+              fontFamily: "'Inconsolata', monospace", fontSize: 9,
+              textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)',
+            }}>
+              Overlap Score
+            </span>
+            <span style={{
+              fontFamily: "'Libre Baskerville', serif", fontSize: 13, fontWeight: 700,
+              color: isExpired ? 'var(--red)' : isAbandoned ? 'var(--ink3)' : 'var(--accent)',
+            }}>
+              {pct}%
+            </span>
+          </div>
+        )}
+        <div className="prog-track">
+          <div className={`prog-fill ${fillClass}`} style={{ width: `${pct}%` }} />
         </div>
-      )}
-      <div className="prog-track">
-        <div className={`prog-fill ${fillClass}`} style={{ width: `${pct}%` }} />
+        <div className="prog-dots" style={{ color: dotColor }}>
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="pdot" style={{ opacity: i < filledDots ? 0.35 : 0.1 }} />
+          ))}
+        </div>
       </div>
-      <div className="prog-dots" style={{ color: dotColor }}>
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="pdot" style={{ opacity: i < filledDots ? 0.35 : 0.1 }} />
-        ))}
-      </div>
-    </div>
 
       <div className="pcard-foot">
         <div className="pcard-time">
@@ -184,14 +182,8 @@ const ProjectCard = ({
             {matchesCount} match{matchesCount !== 1 ? 'es' : ''}
           </div>
         )}
-
-        {/*<div className="pcard-live">
-          <div className="live-bars">
-            <span /><span /><span /><span />
-          </div>
-          Live
-        </div>*/}
       </div>
+
     </div>
   );
 };
