@@ -5,15 +5,19 @@
 
 import { Clock, ArrowLeft, FileText, Calendar, User, Tag, Download, Trash2, RefreshCw, Search } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useStore } from '../../hooks/useStore';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { useAuth } from '../../hooks/useAuth';
 import InfringementModal from '../../components/dashboard/InfringementModal';
 import DocumentModal from '../../components/dashboard/DocumentModal';    // ← NEW
 import DashboardSidebar from '../../components/layout/DashboardSidebar';
+import MatchCard from '../../components/dashboard/MatchCard';
 import { patentApi } from '../../api/patentApi';
 import { deletePatent, updatePatent } from '../../store/slices/patentSlice';
 import SearchLimitationEditor from '../../components/dashboard/SearchLimitationEditor';
+import NotificationBell from '../../components/dashboard/NotificationBell';
+
 
 const getStatusShorthand = (status) => {
   status = String(status || '');
@@ -629,99 +633,6 @@ const SectionCard = ({ title, eyebrow, icon: Icon, children, actions }) => (
   </div>
 );
 
-// ─────────────────────────────────────────────────────────────
-// MatchCard — reused in both the "previous results" strip and
-// the normal completed-results grid.
-// ─────────────────────────────────────────────────────────────
-const MatchCard = ({ match, updatedAt, onSelect }) => {
-  
-  const isHigh         = match.riskLevel === 'high';
-  const isMedium       = match.riskLevel === 'medium';
-  const matchCardClass = isHigh ? 'expired' : isMedium ? 'abandoned' : 'patented';
-  const isProduct      = match.type === 'product';
-
-  return (
-    <div
-      className={`pcard ${matchCardClass}`}
-      onClick={() => {
-        console.log(`🔍 Selected match [${match.type}]:`, match);
-        onSelect(match);
-      }}
-    >
-      <div className="pcard-top">
-        <span className={`pcard-badge ${matchCardClass}`}>
-          <span className="pcard-dot" />
-          {typeof match.badge === 'string' ? match.badge.charAt(0).toUpperCase() + match.badge.slice(1) : match.badge} Risk
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span className="pd-type-pill" data-type={isProduct ? 'product' : 'patent'}>
-            {isProduct ? '🛒 Product' : '📄 Patent'}
-          </span>
-          <button
-            className="card-ext"
-            aria-label="Open"
-            onClick={e => {
-              e.stopPropagation();
-              console.log(`🔍 Selected match [${match.type}]:`, match);
-              onSelect(match);
-            }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-              <polyline points="15 3 21 3 21 9"/>
-              <line x1="10" y1="14" x2="21" y2="3"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <div className="pcard-title">{match.title}</div>
-
-      <div className="pcard-num">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/></svg>
-        {isProduct ? `Product: ${match.id}` : `Patent: ${match.id}`}
-      </div>
-
-      {match.company && (
-        <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8 }}>
-          Company: {match.company}
-        </div>
-      )}
-
-      {isProduct && match.claims?.length > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--ink3)', marginBottom: 8, fontStyle: 'italic' }}>
-          "{match.claims[0].slice(0, 80)}…"
-        </div>
-      )}
-
-      <div className="pcard-progress">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontFamily: "'Inconsolata', monospace", fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)' }}>Overlap Score</span>
-          <span style={{ fontFamily: "'Libre Baskerville', serif", fontSize: 14, fontWeight: 700, color: isHigh ? 'var(--red)' : isMedium ? 'var(--amber)' : 'var(--accent)' }}>{match.score}%</span>
-        </div>
-        <div className="prog-track">
-          <div className={`prog-fill ${isHigh ? 'red' : isMedium ? 'grey' : 'green'}`} style={{ width: `${match.score}%` }} />
-        </div>
-        {match.matchedClaims && (
-          <div style={{ fontSize: 10, color: 'var(--ink3)', marginTop: 5, fontFamily: "'Inconsolata', monospace" }}>
-            Claims: {match.matchedClaims.join(', ')}
-          </div>
-        )}
-      </div>
-
-      <div className="pcard-foot">
-        <div className="pcard-time">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          {updatedAt}
-        </div>
-        <div className="pcard-live">
-          <div className="live-bars"><span /><span /><span /><span /></div>
-          Live
-        </div>
-      </div>
-    </div>
-  );
-};
 
 
 
@@ -739,6 +650,7 @@ const PatentDetailPage = () => {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const fileInputRef   = useRef();
   
+  const { patents } = useStore();
 
   const handleAddDocument = async (e) => {
   const file = e.target.files?.[0];
@@ -775,6 +687,30 @@ const PatentDetailPage = () => {
 
   // ── Ref for the background polling interval ──
   const pollIntervalRef = useRef(null);
+
+  const mappedPatentsForBell = patents.patents.map(p => {
+    const lastViewed  = p.last_viewed  ? new Date(p.last_viewed)  : null;
+    const lastUpdated = p.last_updated || p.updated_date || p.lastUpdated;
+    const hasUpdates  = lastUpdated && lastViewed
+      ? new Date(lastUpdated) > lastViewed   // ← same logic as dashboard
+      : Boolean(lastUpdated);
+
+    return {
+      id:             p._id,
+      title:          p.title || p.name || 'Untitled Project',
+      patentNumber:   p.patentId || String(p._id || '').split('_')[1] || 'N/A',
+      status:         p.status,
+      updatedAt:      p.lastUpdated || p.updated_date || p.created_date,
+      inventors:      p.inventors,
+      filedDate:      p.filedDate || p.filed_date,
+      keywords:       p.keywords,
+      description:    p.description,
+      matchesCount:   p.matchCount || p.match_count || 0,
+      documentsCount: p.documentsCount,
+      progress:       0,
+      hasUpdates,     // ← replaces Boolean(p.last_updated || p.updated_date)
+    };
+  });
 
   const title          = caseData?.title    || projectData.title        || 'Untitled Case';
   const patentNumber   = caseData?.patentId || projectData.patentNumber || caseData?._id?.split('_')[1] || 'N/A';
@@ -813,20 +749,6 @@ const PatentDetailPage = () => {
     console.log('🃏 All potential matches:', JSON.stringify(potentialMatches, null, 2));
 
 
-    
-
-  /*const iaStatus      = String(infringementAnalysisStatus || '').toLowerCase();
-  const iaIsCompleted = iaStatus === 'completed';
-  const iaIsUnknown   = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
-  const iaIsInFlight  = !iaIsCompleted && !iaIsUnknown;
-
-  const shouldShowMatches =
-    (iaIsCompleted && realMatches.length > 0) ||
-    (iaIsUnknown   && realMatches.length > 0);
-
-  const shouldShowEmpty =
-    (iaIsCompleted && realMatches.length === 0) ||
-    (iaIsUnknown   && realMatches.length === 0);*/
     // ✅ REPLACE with this — simple, always shows matches if they exist
     const shouldShowMatches = realMatches.length > 0;
     const shouldShowEmpty   = !analysisLoading && realMatches.length === 0;
@@ -836,14 +758,6 @@ const PatentDetailPage = () => {
     const iaIsUnknown  = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
     const iaIsInFlight = !iaIsCompleted && !iaIsUnknown;
 
-  /*const loadCase = useCallback(async () => {
-    const c = await patentApi.getCaseById(caseId);
-    try {
-      const chart = await patentApi.getInfringementChart(caseId);
-      if (chart && Object.keys(chart).length > 0) c.claimsChart = chart;
-    } catch (e) { console.warn('Claims chart unavailable', e); }
-    return c;
-  }, [caseId]);*/
         const loadCase = useCallback(async () => {
         const c = await patentApi.getCaseById(caseId);
         // Only fetch chart if infringements already exist
@@ -933,6 +847,44 @@ useEffect(() => {
 }, [analysisLoading, pollCaseDetails]);  // ← removed iaIsInFlight
 
   useEffect(() => { fetchCaseDetails(); }, [fetchCaseDetails]);
+
+
+  // ── Last Viewed tracking ─────────────────────────────────────
+useEffect(() => {
+  if (!caseId) return;
+
+  const updateLastViewed = () => {
+    patentApi.updateCase(caseId, {
+      last_viewed: new Date().toISOString(),
+    }).catch(err => {
+      console.warn('Failed to update last_viewed:', err.message);
+    });
+  };
+
+  // ── 1. On page open ──────────────────────────────────────────
+  updateLastViewed();
+
+  // ── 2. Browser close / tab close / refresh ───────────────────
+  const handleBeforeUnload = () => {
+    const blob = new Blob(
+      [JSON.stringify({ _id: caseId, last_viewed: new Date().toISOString() })],
+      { type: 'application/json' }
+    );
+    navigator.sendBeacon('/api/update-patent', blob);
+  };
+  window.addEventListener('beforeunload', handleBeforeUnload);
+
+  // ── 3. Browser back button ───────────────────────────────────
+  const handlePopState = () => updateLastViewed();
+  window.addEventListener('popstate', handlePopState);
+
+  return () => {
+    // ── 4. React Router navigation (your Back button, Link, navigate) ──
+    updateLastViewed();
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.removeEventListener('popstate', handlePopState);
+  };
+}, [caseId]); // ← only re-runs if caseId changes
 
   const beginSimilarityAnalysis = async () => {
     const keywords = caseData?.keywords       || [];
@@ -1131,12 +1083,12 @@ useEffect(() => {
           </div>
 
           <div className="tn-right">
-            <button className="tn-icon" aria-label="Notifications">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
-            </button>
+            <NotificationBell
+              patents={mappedPatentsForBell}
+              onPatentClick={(patent) =>
+                navigate(`/patent-detail?id=${patent.id}`)
+              }
+            />
             <div className="tn-vsep" />
             <Link to="/dashboard" className="tn-btn">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1602,8 +1554,18 @@ useEffect(() => {
               key={index}
               match={match}
               updatedAt={updatedAt}
+              caseId={caseId}
               onSelect={setSelectedMatch}
+              onExclude={(excludedId) =>
+                setCaseData(prev => ({
+                  ...prev,
+                  infringements: (prev?.infringements || []).filter(
+                    inf => (inf.product_id || inf.entry_id || inf.patent) !== excludedId
+                  ),
+                }))
+              }
             />
+            
           ))}
         </div>
       )}
