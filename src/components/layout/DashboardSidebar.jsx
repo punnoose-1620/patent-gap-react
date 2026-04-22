@@ -1,5 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
+import { useState } from 'react'
+
+
 
 const NAV_ITEMS = [
   {
@@ -14,21 +17,21 @@ const NAV_ITEMS = [
         ),
         label: 'Dashboard', id: 'dashboard', badge: null, href: '/dashboard',
       },
-      {
+      /*{
         icon: (
           <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
           </svg>
         ),
         label: 'Patents', id: 'patents', badge: { text: '', type: 'green' },
-      },
+      },*/
       {
         icon: (
           <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
         ),
-        label: 'Monitoring', id: 'monitoring', badge: null,
+        label: 'Monitoring', id: 'monitoring', badge: null, wip: true,
       },
       {
         icon: (
@@ -37,7 +40,7 @@ const NAV_ITEMS = [
             <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
         ),
-        label: 'Findings', id: 'findings', badge: null,
+        label: 'Findings', id: 'findings', badge: null, wip: true,
       },
     ],
   },
@@ -51,7 +54,7 @@ const NAV_ITEMS = [
             <line x1="6" y1="20" x2="6" y2="14"/>
           </svg>
         ),
-        label: 'Reports', id: 'reports', badge: null,
+        label: 'Reports', id: 'reports', badge: null, wip: true,
       },
       {
         icon: (
@@ -59,7 +62,7 @@ const NAV_ITEMS = [
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
         ),
-        label: 'History', id: 'history', badge: null,
+        label: 'History', id: 'history', badge: null, wip: true,
       },
     ],
   },
@@ -90,7 +93,7 @@ const NAV_ITEMS = [
 export default function DashboardSidebar({ activeItem, onItemClick, isOpen, onClose }) {
   const navigate = useNavigate()
   //const user = useSelector((state) => state.auth.user)
-
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0 })
   // In DashboardSidebar.jsx — replace the existing useSelector line
   const reduxUser  = useSelector((state) => state.auth.user)    // basic auth user
   const userProfile = useSelector((state) => state.user.profile) // full profile from API
@@ -157,7 +160,13 @@ export default function DashboardSidebar({ activeItem, onItemClick, isOpen, onCl
                 <button
                   key={item.id}
                   className={`sb-link${activeItem === item.id ? ' active' : ''}`}
-                  onClick={() => handleClick(item)}
+                  onClick={() => !item.wip && handleClick(item)}
+                  style={item.wip ? { cursor: 'not-allowed', opacity: 0.6, position: 'relative' } : { position: 'relative' }}
+                  onMouseEnter={item.wip ? (e) => {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    setTooltip({ visible: true, x: rect.right + 8, y: rect.top + rect.height / 2 })
+                  } : undefined}
+                  onMouseLeave={item.wip ? () => setTooltip({ visible: false, x: 0, y: 0 }) : undefined}
                 >
                   {item.icon}
                   {item.label}
@@ -214,6 +223,28 @@ export default function DashboardSidebar({ activeItem, onItemClick, isOpen, onCl
           </button>
         </div>
       </aside>
+
+      {/* Global tooltip — outside sidebar, no clipping */}
+      {tooltip.visible && (
+        <div style={{
+          position: 'fixed',
+          left: tooltip.x,
+          top: tooltip.y,
+          transform: 'translateY(-50%)',
+          background: '#2c2c2a',
+          color: '#d3d1c7',
+          fontSize: 11,
+          padding: '4px 8px',
+          borderRadius: 6,
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+          zIndex: 9999,
+        }}>
+          Under development
+        </div>
+      )}
     </>
   )
+  
 }
+
