@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: 'https://backend.patentgap.ai/api',
+  baseURL: 'https://backend-dev.patentgap.ai/api',
   timeout: 600000, // 10 minutes
   //withCredentials: true,          // ← add this
   headers: {
