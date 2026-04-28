@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../../hooks/useStore';
 import { useUI } from '../../hooks/useUI';
@@ -93,6 +93,8 @@ export default function DashboardPage() {
   const [activeItem, setActiveItem] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alertDismissed, setAlertDismissed] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreRef = useRef(null);
 
   const newPatent = { title: '', patentNumber: '' };
 
@@ -107,7 +109,7 @@ export default function DashboardPage() {
 
   const handleLoadDashboard = async () => {
     console.log('🔐 Session:', JSON.parse(localStorage.getItem('session') || '{}'));
-    await Promise.all([loadPatents()]);
+    await Promise.all([loadPatents(1, false), loadStats()]);
   };
 
   const handleRefresh = async () => {
@@ -116,6 +118,28 @@ export default function DashboardPage() {
     setIsRefreshing(false);
   };
 
+  const loadMorePatents = useCallback(async () => {
+    if (ui.loading || isLoadingMore || !patents.pagination.hasNext) return;
+    setIsLoadingMore(true);
+    await loadPatents((patents.pagination.page || 1) + 1, true);
+    setIsLoadingMore(false);
+  }, [ui.loading, isLoadingMore, patents.pagination.hasNext, patents.pagination.page, loadPatents]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node) return undefined;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        loadMorePatents();
+      }
+    }, { rootMargin: '250px' });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loadMorePatents]);
+
+  // Toggle stat card filter: clicking the active card resets to 'all'
   const handleStatCardClick = (cardKey) => {
     const next = statusFilter === cardKey ? 'all' : cardKey;
     filterPatents({ status: next });
@@ -465,17 +489,30 @@ export default function DashboardPage() {
 
           {/* ── Patent Cards Grid ── */}
           {!ui.loading && filteredPatents.length > 0 && (
-            <div className="patents-grid">
-              {filteredPatents.map((patent, index) => (
-                <div
-                  key={patent.id}
-                  className="animate-fadeInUp"
-                  style={{ animationDelay: `${0.5 + index * 0.1}s`, opacity: 0 }}
-                >
-                  <ProjectCard {...patent} riskLevel={patent.riskLevel} hasUpdates={patent.hasUpdates} />
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="patents-grid">
+                {filteredPatents.map((patent, index) => (
+                  <div
+                    key={patent.id}
+                    className="animate-fadeInUp"
+                    style={{ animationDelay: `${0.5 + index * 0.1}s`, opacity: 0 }}
+                  >
+                   <ProjectCard {...patent} riskLevel={patent.riskLevel} hasUpdates={patent.hasUpdates} />
+                  </div>
+                ))}
+              </div>
+              <div ref={loadMoreRef} style={{ height: 1 }} />
+              {isLoadingMore && (
+                <p style={{ textAlign: 'center', marginTop: 16, color: 'var(--ink3)', fontSize: 13 }}>
+                  Loading more patents...
+                </p>
+              )}
+              {!patents.pagination.hasNext && patents.patents.length > 0 && (
+                <p style={{ textAlign: 'center', marginTop: 16, color: 'var(--ink3)', fontSize: 13 }}>
+                  End of list
+                </p>
+              )}
+            </>
           )}
 
           {/* ── Weekly Search Section ── */}

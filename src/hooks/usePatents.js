@@ -1,6 +1,14 @@
 import { useCallback } from "react"; // ← add this
 import { useDispatch, useSelector } from "react-redux";
-import { setPatents, setStats, addPatent, setSelectedPatent, setFilters } from "../store/slices/patentSlice";
+import {
+  setPatents,
+  appendPatents,
+  setPagination,
+  setStats,
+  addPatent,
+  setSelectedPatent,
+  setFilters
+} from "../store/slices/patentSlice";
 import { useUI } from "./useUI";
 import { patentApi } from "../api/patentApi";
 
@@ -11,11 +19,23 @@ export const usePatents = () => {
   const userId = session?.user_id || session?.user?.id || null;
 
   // ✅ Wrapped in useCallback — stable reference, won't cause infinite loops
-  const loadPatents = useCallback(async () => {
+  const loadPatents = useCallback(async (page = 1, append = false) => {
     try {
-      //const cases = await patentApi.getAllCases();
-      const cases = await patentApi.getMyCases();
-      dispatch(setPatents(cases));
+      const result = await patentApi.getMyCases(page);
+      const cases = result?.items || [];
+      const pagination = result?.pagination || {};
+      if (append) {
+        dispatch(appendPatents(cases));
+      } else {
+        dispatch(setPatents(cases));
+      }
+      dispatch(setPagination({
+        page: pagination.page || page,
+        pageSize: pagination.page_size || 10,
+        total: pagination.total || 0,
+        totalPages: pagination.total_pages || 0,
+        hasNext: !!pagination.has_next,
+      }));
 
       const calculatedStats = {
         activeScans: cases.filter(c => c.status === 'processing').length,

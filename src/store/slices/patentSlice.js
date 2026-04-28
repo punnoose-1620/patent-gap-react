@@ -4,6 +4,13 @@ const patentSlice = createSlice({
   name: "patents",
   initialState: {
     patents: [],
+    pagination: {
+      page: 1,
+      pageSize: 10,
+      total: 0,
+      totalPages: 0,
+      hasNext: false,
+    },
     selectedPatent: null,
     stats: {
       activeScans: 0,
@@ -22,6 +29,12 @@ const patentSlice = createSlice({
   reducers: {
     setPatents: (state, action) => {
       state.patents = action.payload;
+    },
+    appendPatents: (state, action) => {
+      state.patents = [...state.patents, ...action.payload];
+    },
+    setPagination: (state, action) => {
+      state.pagination = { ...state.pagination, ...action.payload };
     },
     setSelectedPatent: (state, action) => {
       state.selectedPatent = action.payload;
@@ -47,6 +60,8 @@ const patentSlice = createSlice({
 
 export const {
   setPatents,
+  appendPatents,
+  setPagination,
   setSelectedPatent,
   addPatent,
   updatePatent,

@@ -18,19 +18,25 @@ const apiError = (error, fallback) => {
 
 export const patentApi = {
 
-  getAllCases: async () => {
+  getAllCases: async (page = 1) => {
     try {
-      const { data } = await axiosInstance.get('/all-cases');
-      return data.cases || [];
+      const { data } = await axiosInstance.get('/all-cases', { params: { page } });
+      return {
+        items: data.items || [],
+        pagination: data.pagination || {},
+      };
     } catch (error) {
       apiError(error, 'Failed to fetch cases');
     }
   },
 
-  getMyCases: async () => {
+  getMyCases: async (page = 1) => {
     try {
-      const { data } = await axiosInstance.get('/my-cases');
-      return data.cases || [];
+      const { data } = await axiosInstance.get('/my-cases', { params: { page } });
+      return {
+        items: data.items || [],
+        pagination: data.pagination || {},
+      };
     } catch (error) {
       apiError(error, 'Failed to fetch cases');
     }
