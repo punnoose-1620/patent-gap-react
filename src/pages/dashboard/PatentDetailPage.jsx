@@ -928,7 +928,7 @@ const PatentDetailPage = () => {
   : caseData?.keywords || projectData.keywords || 'No keywords available';
   const description    = caseData?.context || caseData?.description || projectData.description || 'No description available';
   const matchesCount   = caseData?.infringements?.length ?? projectData.matchesCount ?? 0;
-  const documentsCount = caseData?.documents?.length || projectData.documentsCount || 1;
+  const documentsCount = caseData?.documents?.length || projectData.documentsCount || 0;
   const isProcessing   = (caseData?.status || '').toLowerCase().includes('processing');
   const claimsChart    = caseData?.claimsChart || {};
   //const infringementAnalysisStatus = caseData?.infringementAnalysisStatus || 'unknown';
@@ -973,10 +973,41 @@ const PatentDetailPage = () => {
             console.warn('⚠️ loadCase: getCaseById returned null');
             return null; // ← stop here, don't proceed to chart calls
           }
-          const hasInfringements = Array.isArray(c?.infringements) && c.infringements.length > 0;
-          const hasClaims = Array.isArray(c?.claims) && c.claims.length > 0;
 
-          if (hasInfringements && hasClaims) {
+          // ── Generate description if missing or too short ──────────────────────
+            const desc   = c.description || '';
+            const status = c.status      || '';
+            if (!desc || desc === status || desc.split(' ').length < 10) {
+              try {
+                const summaryData = await patentApi.generateDescription(caseId);
+                if (summaryData?.summary) c.description = summaryData.summary;
+              } catch (e) {
+                console.warn('generateDescription failed (non-blocking):', e.message);
+              }
+            }
+
+            // ── Fetch & store claims if not already present ───────────────────────
+            const hasClaims = Array.isArray(c?.claims) && c.claims.length > 0;
+            if (!hasClaims) {
+              try {
+                const claims = await patentApi.getClaims(caseId);
+                if (Array.isArray(claims) && claims.length > 0) {
+                  c.claims = claims;
+                  await patentApi.updateCase(caseId, { claims }).catch(() => {});
+                }
+              } catch (e) {
+                console.warn('getClaims failed (non-blocking):', e.message);
+              }
+            }
+
+            const hasInfringements = Array.isArray(c?.infringements) && c.infringements.length > 0;
+            const hasClaims2 = Array.isArray(c?.claims) && c.claims.length > 0; 
+
+
+          //const hasInfringements = Array.isArray(c?.infringements) && c.infringements.length > 0;
+          //const hasClaims = Array.isArray(c?.claims) && c.claims.length > 0;
+
+          if (hasInfringements && hasClaims2) {
             if (needsInfringementChartApi(c.infringements)) {
               try {
                 // Add a race with a timeout so it can't block forever 
@@ -1117,7 +1148,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
     .then(res => {
       //console.log('✅ last_viewed updated successfully:', res);
       //console.log('📅 last_viewed set to:', timestamp);
-     // dispatch(updatePatent({ _id: caseId, last_viewed: timestamp }));
+      dispatch(updatePatent({ _id: caseId, last_viewed: timestamp }));
     })
     .catch(err => {
       console.warn('Failed to update last_viewed:', err.message);
@@ -1807,7 +1838,8 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
                       </div>
                     );
                   })
-                : Array.from({ length: documentsCount }, (_, i) => (
+                : documentsCount > 0
+                  ? Array.from({ length: documentsCount }, (_, i) => (
                     <div key={i} className="pd-doc-thumb">
                       <div className="pd-doc-inner pd-doc-placeholder">
                         <FileText size={28} color="var(--accent)" strokeWidth={1.5} />
@@ -1815,6 +1847,9 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
                       </div>
                     </div>
                   ))
+                  : <p style={{ fontSize: 13.5, color: 'var(--ink3)', fontStyle: 'italic' }}>
+                    No documents uploaded yet.
+                  </p>
               }
             </div>
           </SectionCard>
