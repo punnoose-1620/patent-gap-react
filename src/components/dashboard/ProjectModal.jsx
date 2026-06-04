@@ -181,11 +181,13 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
         const data = await patentApi.fetchFromUspto(patentNumber.trim());
         if (!data.success) throw new Error(data.message || 'USPTO fetch failed');
 
-        let caseDetails = data.case_data;
+       // let caseDetails = data.case_data;
+       let caseDetails = data.case_data || {};
         const desc   = caseDetails.description || '';
         const status = caseDetails.status || '';
 
-        if (desc === status || desc.split(' ').length < 10) {
+      // Description generation moved to patent detail page.
+       /* if (desc === status || desc.split(' ').length < 10) {
           try {
             setLoadingStatus('describing');
             const summaryData = await patentApi.generateDescription(data.case_id);
@@ -193,10 +195,14 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
           } catch (e) {
             console.warn('Summary generation failed, continuing anyway', e);
           }
-        }
+        }*/
 
         const caseId   = data.case_id;
         const keywords = caseDetails.keywords || [];
+
+        // Description generation and claims fetching are handled
+        // on the patent detail page after the patent finishes loading.
+        /*const keywords = caseDetails.keywords || [];
 
         setLoadingStatus('claims');
         let claims = [];
@@ -208,9 +214,10 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
 
         if (claims.length > 0) {
           await patentApi.updateCase(caseId, { claims }).catch(() => {});
-        }
+        }*/
 
-        onContinue({ skipStep2: true, caseId });
+       // onContinue({ skipStep2: true, caseId });
+       onContinue({ skipStep2: true, caseId: data.case_id });
 
       } else {
         onContinue({
@@ -241,8 +248,8 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
 
   const patentIdLoadingLabel =
     loadingStatus === 'fetching'   ? 'Fetching patent information…' :
-    loadingStatus === 'describing' ? 'Generating description…'      :
-    loadingStatus === 'claims'     ? 'Isolating claims…'            :
+    //loadingStatus === 'describing' ? 'Generating description…'      :
+    //loadingStatus === 'claims'     ? 'Isolating claims…'            :
     'Processing…';
 
   const totalBatchMB = (batchFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(2);
@@ -425,8 +432,8 @@ const UploadPatentStep = ({ onClose, onContinue }) => {
               }}>
                 {[
                   { key: 'fetching',   label: 'Fetching patent information…' },
-                  { key: 'describing', label: 'Generating description'       },
-                  { key: 'claims',     label: 'Isolating claims'             },
+                 // { key: 'describing', label: 'Generating description'       },
+                  //{ key: 'claims',     label: 'Isolating claims'             },
                 ].map((s, i, arr) => {
                   const keys    = arr.map(a => a.key);
                   const current = keys.indexOf(loadingStatus);
@@ -793,7 +800,8 @@ const AddContextStep = ({ step1Data, onBack, onClose, onSuccess }) => {
       }
 
       onSuccess?.();
-      navigate(`/patent-detail?id=${caseId}`);
+     // navigate(`/patent-detail?id=${caseId}`);
+        navigate(`/dashboard`);
     } catch (err) {
       setError(err?.message || 'Error occurred while creating patent. Please try again.');
     } finally {
@@ -965,7 +973,8 @@ const ProjectModal = ({ isOpen, onClose }) => {
   const handleStep1Continue = (data) => {
     if (data.skipStep2) {
       onClose();
-      if (!data.batchDone) navigate(`/patent-detail?id=${data.caseId}`);
+      //if (!data.batchDone) navigate(`/patent-detail?id=${data.caseId}`);
+      if (!data.batchDone) navigate(`/dashboard`);
       return;
     }
     setStep1Data(data);
