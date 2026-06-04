@@ -40,13 +40,13 @@ export const usePatents = () => {
       }));
 
 
-      const calculatedStats = {
+     /* const calculatedStats = {
         activeScans: cases.filter(c => c.status === 'processing').length,
         patentsAnalyzed: cases.length,
         highRiskMatches: cases.reduce((sum, c) => sum + (c.highRiskMatches || c.match_count || 0), 0),
         clearedPatents: cases.filter(c => c.status === 'complete' && !c.matchCount).length,
       };
-      dispatch(setStats(calculatedStats));
+      dispatch(setStats(calculatedStats));*/ // Stats are now loaded separately in loadStats()
 
     } catch (error) {
       console.error('Failed to load patents:', error);
