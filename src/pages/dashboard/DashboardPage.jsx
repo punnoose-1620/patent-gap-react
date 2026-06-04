@@ -139,6 +139,8 @@ export default function DashboardPage() {
   const [initialFetchCount, setInitialFetchCount] = useState(0);
   const [errorIds, setErrorIds] = useState([]);
 
+  console.log(fetchingIds, 'fetchingIds');
+
   
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -225,12 +227,16 @@ export default function DashboardPage() {
     return () => observer.disconnect();
   }, [loadMorePatents]);
 
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
         let cancelled = false;
 
         const poll = async () => {
           try {
             const profile = await loadUserProfile();
+
+            console.log('🔍 Raw profile:', profile?.fetching_patents, profile?.error_patents);
             if (cancelled) return;
 
             // inside the poll function, replace the setFetchingIds calls:
@@ -244,10 +250,26 @@ export default function DashboardPage() {
             const errorIds = rawError
               ? (Array.isArray(rawError) ? rawError : String(rawError).split(',').map(s => s.trim()).filter(Boolean))
               : [];
+              
+            if (!hasInitialized.current && ids.length === 0 && errorIds.length === 0) {
+              hasInitialized.current = true;
+              return; 
+            }
 
-            setInitialFetchCount(prev => prev === 0 && ids.length > 0 ? ids.length : prev);
+            hasInitialized.current = true;
+
+            //setInitialFetchCount(prev => prev === 0 && ids.length > 0 ? ids.length : prev);
+
+            // Only set initialCount when we FIRST see patents coming in — never reset it
+            setInitialFetchCount(prev => {
+              if (prev === 0 && ids.length > 0) return ids.length;
+              if (prev > 0 && ids.length > prev) return ids.length; // batch grew
+              return prev; // never decrease
+            });
+
             setFetchingIds(ids);
             setErrorIds(errorIds); // ← new state
+            console.log('⏱️ Polled fetching_ids:', ids, 'error_patents:', errorIds);
           } catch (e) {
             console.warn('fetching_id poll failed:', e);
           }
@@ -616,8 +638,9 @@ export default function DashboardPage() {
             
             <StatCard
               title="Cleared Patents"
-              //value={ui.loading ? '—' : (patents.stats.clearedPatents || closedPatents.length)}
-              value={ui.loading ? '—' : (closedPatents.length)}
+              value={ui.loading ? '—' : (patents.stats.clearedPatents ?? closedPatents.length)}
+             // value={ui.loading ? '—' : (patents.stats.clearedPatents || closedPatents.length)}
+              //value={ui.loading ? '—' : (closedPatents.length)}
               subtitle="No infringement"
               icon={<CheckCircle size={18} />}
               color="green"
