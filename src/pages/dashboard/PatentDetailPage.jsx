@@ -1583,25 +1583,44 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
     </div>
   </div>
 
+  
+ 
   {/* ── Infringement Sources ── */}
-  {caseData?.infringement_sources?.length > 0 && (
-    <div style={{
-      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
-      marginBottom: 10, paddingLeft: 2,
-    }}>
-      <span style={{
-        fontFamily: "'Inconsolata', monospace", fontSize: 10,
-        textTransform: 'uppercase', letterSpacing: '0.10em',
-        color: 'var(--ink3)', flexShrink: 0, marginRight: 4,
-      }}>
-        Infringement sources
-      </span>
-      {caseData.infringement_sources.map((src, i) => (
-        <span key={i} className="pcard-num" style={{ margin: 0 }}>{src}</span>
-      ))}
-    </div>
-  )}
+      {(() => {
+        // Derive sources from infringements if the top-level field is missing
+        const sources = caseData?.infringement_sources?.length
+          ? caseData.infringement_sources
+          : (caseData?.infringements || [])
+              .flatMap(inf => {
+                // nested-case format: infringements[].infringements[].source
+                if (Array.isArray(inf.infringements)) {
+                  return inf.infringements.map(i => i.source).filter(Boolean);
+                }
+                // product / patent format: top-level source field
+                return inf.source ? [inf.source] : [];
+              });
 
+        const uniqueSources = [...new Set(sources)].filter(Boolean);
+        if (!uniqueSources.length) return null;
+
+        return (
+          <div style={{
+            display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+            marginBottom: 10, paddingLeft: 2,
+          }}>
+            <span style={{
+              fontFamily: "'Inconsolata', monospace", fontSize: 10,
+              textTransform: 'uppercase', letterSpacing: '0.10em',
+              color: 'var(--ink3)', flexShrink: 0, marginRight: 4,
+            }}>
+              Infringement sources
+            </span>
+            {uniqueSources.map((src, i) => (
+              <span key={i} className="pcard-num" style={{ margin: 0 }}>{src}</span>
+            ))}
+          </div>
+        );
+      })()}
   {/* ── Filter tabs ── */}
   {matchesExpanded && (
     <div style={{
