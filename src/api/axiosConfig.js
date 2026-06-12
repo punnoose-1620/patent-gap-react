@@ -3,7 +3,10 @@ import axios from 'axios';
 const axiosInstance = axios.create({
   //baseURL: 'https://backend.patentgap.ai/api',
   baseURL: 'https://backend-dev.patentgap.ai/api',
-
+  //baseURL: process.env.VITE_API_BASE_URL,
+  //baseURL: import.meta.env.VITE_API_BASE_URL,
+  //baseURL: 'http://192.168.10.157:5000/api',
+  
   timeout: 600000, // 10 minutes
   //withCredentials: true,          // ← add this
   headers: {
