@@ -183,7 +183,8 @@ export default function DashboardPage() {
         // Only poll if any patent has an in-flight analysis
         const hasInFlight = patents.patents.some(p => {
           const s = String(p.infringement_analysis_status || '').toLowerCase();
-          return s !== 'completed' && s !== '' && s !== 'unknown' && s !== 'none';
+          return s !== 'completed' && s !== 'patent sources completed' && s !== '' && s !== 'unknown' && s !== 'none' && s !== 'failed';
+         // return s !== 'completed' && s !== '' && s !== 'unknown' && s !== 'none';
         });
 
         if (!hasInFlight) return;
@@ -360,7 +361,7 @@ export default function DashboardPage() {
           const isValid = (d) => d instanceof Date && !isNaN(d);
 
           const analysisStatus = String(p.infringement_analysis_status || '').toLowerCase();
-          const analysisCompleted = analysisStatus === 'completed';
+          const analysisCompleted = analysisStatus === 'completed' || analysisStatus === 'patent sources completed';
 
         /*  const hasUpdates = analysisCompleted && isValid(lastUpdated) && isValid(lastViewed)
             ? lastUpdated > lastViewed
