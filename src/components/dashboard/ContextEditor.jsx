@@ -11,7 +11,7 @@ const ContextEditor = ({ caseId, initialValue, onSave }) => {
   const textareaRef               = useRef()
 
   useEffect(() => { setValue(initialValue || '') }, [initialValue])
-
+   
   const startEdit = () => {
     setEditing(true)
     setSaveError(null)
