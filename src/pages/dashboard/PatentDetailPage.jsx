@@ -18,6 +18,9 @@ import { deletePatent, updatePatent } from '../../store/slices/patentSlice';
 import SearchLimitationEditor from '../../components/dashboard/SearchLimitationEditor';
 import NotificationBell from '../../components/dashboard/NotificationBell';
 import ClaimsMatrix from '../../components/dashboard/ClaimsMatrix';
+import ContextEditor from '../../components/dashboard/ContextEditor';
+import ClaimsEditor from '../../components/dashboard/ClaimsEditor';
+import EditableInventorsRow from '../../components/dashboard/EditableInventorsRow';
 
 
 const getStatusShorthand = (status) => {
@@ -137,12 +140,20 @@ const calculateOverallRisk = (items = []) => {
     return getRiskTerm(avg);
   }
 };*/
+// to format the source field by making it more human-readable (e.g. "uspto_bulk_import" → "US Patent Office Bulk Import")
+const formatStatus = (str) => {
+  if (!str) return '';
+  return str
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
 
 const getSourceName = (id = '') => {
   if (id.includes('uspto'))     return 'US Patent Office';
   if (id.includes('google'))    return 'Google';
   if (id.includes('espacenet')) return 'Espacenet';
   if (id.includes('local')) return 'Manual Entry';
+  if (id.includes('freepatentsonline')) return 'Free Patents Online';
   return 'Patent Gap';
 };
 
@@ -278,457 +289,7 @@ const InfoRow = ({ icon: Icon, label, value }) => (
   </div>
 );
 
-// ─── Inline editable claims list ─────────────────────────────────────────────
-const ClaimsEditor = ({ caseId, initialClaims, onSave }) => {
-  const [editing,   setEditing]   = useState(false)
-  const [claims,    setClaims]    = useState(initialClaims || [])
-  const [saving,    setSaving]    = useState(false)
-  const [saveError, setSaveError] = useState(null)
 
-  useEffect(() => { setClaims(initialClaims || []) }, [initialClaims])
-
-  const startEdit = () => { setEditing(true); setSaveError(null) }
-
-  const cancel = () => {
-    setClaims(initialClaims || [])
-    setEditing(false)
-    setSaveError(null)
-  }
-
-  const updateClaim = (index, value) => {
-    setClaims(prev => prev.map((c, i) => i === index ? value : c))
-  }
-
-  const addClaim = () => {
-    setClaims(prev => [...prev, ''])
-    setTimeout(() => {
-      const textareas = document.querySelectorAll('.claim-textarea')
-      textareas[textareas.length - 1]?.focus()
-    }, 0)
-  }
-
-  const removeClaim = (index) => {
-    setClaims(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const moveClaim = (index, direction) => {
-    const next = [...claims]
-    const swap = index + direction
-    if (swap < 0 || swap >= next.length) return
-    ;[next[index], next[swap]] = [next[swap], next[index]]
-    setClaims(next)
-  }
-
-  const save = async () => {
-    const trimmed = claims.map(c => c.trim()).filter(Boolean)
-    if (!trimmed.length) { setSaveError('At least one claim is required.'); return }
-
-    const orig = (initialClaims || []).map(c => c.trim()).filter(Boolean)
-    if (JSON.stringify(trimmed) === JSON.stringify(orig)) { setEditing(false); return }
-
-    try {
-      setSaving(true)
-      setSaveError(null)
-      await patentApi.updateCase(caseId, { claims: trimmed })
-      onSave(trimmed)
-      setEditing(false)
-    } catch (err) {
-      setSaveError(err?.message || 'Failed to save claims. Please try again.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // ── Read-only view ──
-  if (!editing) {
-    return (
-      <div style={{ position: 'relative' }}>
-        <button
-          onClick={startEdit}
-          title="Edit claims"
-          style={{
-            position: 'absolute', top: 0, right: 0,
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: 4, borderRadius: 5, color: 'var(--ink3)',
-            display: 'flex', alignItems: 'center', transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--ink3)'}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-        </button>
-
-        <div style={{ display: 'flex', flexDirection: 'column', paddingRight: 28 }}>
-          {claims.map((claim, index) => {
-            const parts        = claim.split('. ')
-            const claimIndex   = parseInt(parts[0])
-            const claimContent = parts.slice(1).join('. ')
-            const display      = !isNaN(claimIndex) && claimContent
-              ? (claimIndex === 1 ? claimContent : `${claimIndex - 1}. ${claimContent}`)
-              : claim
-            return (
-              <p key={index} style={{
-                fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.65,
-                padding: '8px 0',
-                borderBottom: index < claims.length - 1 ? '1px solid var(--rule2)' : 'none',
-                margin: 0,
-              }}>
-                <span style={{
-                  fontFamily: "'Inconsolata', monospace", fontSize: 10,
-                  color: 'var(--ink3)', marginRight: 8,
-                  textTransform: 'uppercase', letterSpacing: '0.08em',
-                }}>
-                  {index + 1}.
-                </span>
-                {display}
-              </p>
-            )
-          })}
-          {claims.length === 0 && (
-            <p style={{ fontSize: 13.5, color: 'var(--ink3)', margin: 0, fontStyle: 'italic' }}>
-              No claims yet. Click edit to add claims.
-            </p>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ── Edit view ──
-  return (
-    <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-        {claims.map((claim, index) => (
-          <div key={index} style={{
-            display: 'flex', gap: 8, alignItems: 'flex-start',
-            background: 'var(--surf2)', borderRadius: 8,
-            padding: '10px 12px',
-            border: '1px solid var(--rule2)',
-          }}>
-            <span style={{
-              fontFamily: "'Inconsolata', monospace", fontSize: 10, fontWeight: 700,
-              color: 'var(--accent)', background: 'var(--acc-soft)',
-              borderRadius: 4, padding: '2px 6px', flexShrink: 0, marginTop: 2,
-              textTransform: 'uppercase', letterSpacing: '0.08em',
-            }}>
-              {index + 1}
-            </span>
-
-            <textarea
-              className="claim-textarea"
-              value={claim}
-              onChange={e => updateClaim(index, e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Escape') { cancel(); return }
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { save(); return }
-              }}
-              rows={3}
-              style={{
-                flex: 1, boxSizing: 'border-box',
-                padding: '6px 8px', fontSize: 13,
-                fontFamily: 'inherit', lineHeight: 1.65,
-                color: 'var(--ink)', background: 'var(--bg)',
-                border: '1.5px solid var(--rule2)',
-                borderRadius: 5, resize: 'vertical', outline: 'none',
-                transition: 'border-color 0.15s',
-              }}
-              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-              onBlur={e  => e.target.style.borderColor = 'var(--rule2)'}
-            />
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
-              <button
-                onClick={() => moveClaim(index, -1)}
-                disabled={index === 0}
-                title="Move up"
-                style={controlBtnStyle(index === 0)}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="18 15 12 9 6 15"/>
-                </svg>
-              </button>
-              <button
-                onClick={() => moveClaim(index, 1)}
-                disabled={index === claims.length - 1}
-                title="Move down"
-                style={controlBtnStyle(index === claims.length - 1)}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
-              <button
-                onClick={() => removeClaim(index)}
-                title="Remove claim"
-                style={{ ...controlBtnStyle(false), color: 'var(--red)', marginTop: 2 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--red-soft)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'var(--surf)'}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/>
-                  <line x1="6"  y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <button
-        onClick={addClaim}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'none', border: '1.5px dashed var(--rule2)',
-          borderRadius: 8, padding: '8px 14px', width: '100%',
-          justifyContent: 'center', cursor: 'pointer',
-          fontFamily: "'Inconsolata', monospace", fontSize: 11,
-          fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em',
-          color: 'var(--ink3)', marginBottom: 12, transition: 'all 0.15s',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.borderColor = 'var(--accent)'
-          e.currentTarget.style.color = 'var(--accent)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.borderColor = 'var(--rule2)'
-          e.currentTarget.style.color = 'var(--ink3)'
-        }}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        Add Claim
-      </button>
-
-      {saveError && (
-        <p style={{
-          fontSize: 12, color: 'var(--red)', margin: '0 0 10px',
-          fontFamily: "'Inconsolata', monospace",
-        }}>
-          ✗ {saveError}
-        </p>
-      )}
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="btn-new"
-          style={{ opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          {saving ? (
-            <>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-                style={{ animation: 'spin 1s linear infinite' }}>
-                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-              </svg>
-              Saving…
-            </>
-          ) : (
-            <>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Save Claims
-            </>
-          )}
-        </button>
-        <button
-          onClick={cancel}
-          disabled={saving}
-          className="btn-export"
-          style={{ opacity: saving ? 0.5 : 1 }}
-        >
-          Cancel
-        </button>
-        <span style={{
-          fontFamily: "'Inconsolata', monospace", fontSize: 10,
-          color: 'var(--ink3)', textTransform: 'uppercase',
-          letterSpacing: '0.08em', marginLeft: 'auto',
-        }}>
-          ⌘↵ save · esc cancel
-        </span>
-      </div>
-    </div>
-  )
-}
-
-// ── Shared style for the up/down/remove control buttons ──
-const controlBtnStyle = (disabled) => ({
-  background: 'var(--surf)', border: '1px solid var(--rule2)',
-  borderRadius: 4, padding: '4px 5px', cursor: disabled ? 'not-allowed' : 'pointer',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  color: disabled ? 'var(--rule2)' : 'var(--ink3)',
-  transition: 'all 0.15s',
-})
-
-// ─── Inline editable context/description ─────────────────────────────────────
-const ContextEditor = ({ caseId, initialValue, onSave }) => {
-  const [editing, setEditing]     = useState(false)
-  const [value, setValue]         = useState(initialValue || '')
-  const [saving, setSaving]       = useState(false)
-  const [saveError, setSaveError] = useState(null)
-  const textareaRef               = useRef()
-
-  useEffect(() => { setValue(initialValue || '') }, [initialValue])
-
-  const startEdit = () => {
-    setEditing(true)
-    setSaveError(null)
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus()
-        textareaRef.current.selectionStart = textareaRef.current.value.length
-      }
-    }, 0)
-  }
-
-  const cancel = () => {
-    setValue(initialValue || '')
-    setEditing(false)
-    setSaveError(null)
-  }
-
-  const save = async () => {
-    const trimmed = value.trim()
-    if (!trimmed) { setSaveError('Description cannot be empty.'); return }
-    if (trimmed === (initialValue || '').trim()) { setEditing(false); return }
-
-    try {
-      setSaving(true)
-      setSaveError(null)
-      await patentApi.updateCase(caseId, { context: trimmed })
-      onSave(trimmed)
-      setEditing(false)
-    } catch (err) {
-      setSaveError(err?.message || 'Failed to save. Please try again.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape')                           { cancel(); return }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { save();   return }
-  }
-
-  if (!editing) {
-    return (
-      <div style={{ position: 'relative' }}>
-        <p style={{ fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.7, margin: 0, paddingRight: 32 }}>
-          {value || 'No description available.'}
-        </p>
-        <button
-          onClick={startEdit}
-          title="Edit description"
-          style={{
-            position: 'absolute', top: 0, right: 0,
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: 4, borderRadius: 5, color: 'var(--ink3)',
-            display: 'flex', alignItems: 'center',
-            transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--ink3)'}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        rows={6}
-        style={{
-          width: '100%', boxSizing: 'border-box',
-          padding: '10px 12px', fontSize: 13.5,
-          fontFamily: 'inherit', lineHeight: 1.7,
-          color: 'var(--ink)', background: 'var(--bg)',
-          border: '1.5px solid var(--accent)',
-          borderRadius: 6, resize: 'vertical',
-          outline: 'none', marginBottom: 10,
-          boxShadow: '0 0 0 3px var(--acc-soft)',
-        }}
-      />
-
-      {saveError && (
-        <p style={{
-          fontSize: 12, color: 'var(--red)',
-          marginBottom: 8, margin: '0 0 8px',
-          fontFamily: "'Inconsolata', monospace",
-        }}>
-          ✗ {saveError}
-        </p>
-      )}
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="btn-new"
-          style={{ opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          {saving ? (
-            <>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-                style={{ animation: 'spin 1s linear infinite' }}>
-                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-              </svg>
-              Saving…
-            </>
-          ) : (
-            <>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Save
-            </>
-          )}
-        </button>
-
-        <button
-          onClick={cancel}
-          disabled={saving}
-          className="btn-export"
-          style={{ opacity: saving ? 0.5 : 1 }}
-        >
-          Cancel
-        </button>
-
-        <span style={{
-          fontFamily: "'Inconsolata', monospace", fontSize: 10,
-          color: 'var(--ink3)', textTransform: 'uppercase', letterSpacing: '0.08em',
-          marginLeft: 'auto',
-        }}>
-          ⌘↵ save · esc cancel
-        </span>
-      </div>
-    </div>
-  )
-}
 
 const SectionCard = ({ title, eyebrow, icon: Icon, children, actions }) => (
   <div style={{ marginBottom: 20 }}>
@@ -763,7 +324,7 @@ const PatentDetailPage = () => {
   const { logout } = useAuth();
   const [searchParams] = useSearchParams();
   const [matchesExpanded, setMatchesExpanded] = useState(true); // collapsed by default
-  const [claimsExpanded, setClaimsExpanded] = useState(false); // collapsed by default
+  const [claimsExpanded, setClaimsExpanded] = useState(true); // collapsed by default
 
   const [matchTypeFilter, setMatchTypeFilter] = useState('product'); // default: product
 
@@ -776,25 +337,26 @@ const PatentDetailPage = () => {
   
   const { patents } = useStore();
 
+  
   const handleAddDocument = async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  try {
-    setUploadingDoc(true);
-    const result = await patentApi.uploadFileToCase(caseId, file);
-    if (result) { // ← guard: only add if upload actually returned data
-      setCaseData(prev => ({
-        ...prev,
-        documents: [...(prev?.documents || []), result],
-      }));
-    }
-  } catch (err) {
-    alert(`Upload failed: ${err?.message || 'Unknown error'}`);
-  } finally {
-    setUploadingDoc(false);
-    e.target.value = '';
-  }
-};
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          setUploadingDoc(true);
+          const result = await patentApi.uploadFileToCase(caseId, file);
+          if (result) { // ← guard: only add if upload actually returned data
+            setCaseData(prev => ({
+              ...prev,
+              documents: [...(prev?.documents || []), result],
+            }));
+          }
+        } catch (err) {
+          alert(`Upload failed: ${err?.message || 'Unknown error'}`);
+        } finally {
+          setUploadingDoc(false);
+          e.target.value = '';
+        }
+    };
 
   
 
@@ -876,10 +438,7 @@ const PatentDetailPage = () => {
                   const analysisStatus = String(p.infringement_analysis_status || '').toLowerCase();
                   const analysisCompleted = analysisStatus === 'completed';
 
-                 /* const hasUpdates = analysisCompleted && isValid(lastUpdated) && isValid(lastViewed)
-                    ? lastUpdated > lastViewed
-                    : false;*/
-
+                
                     // Instead of strict greater-than:
                 const hasUpdates = analysisCompleted && isValid(lastUpdated) && isValid(lastViewed)
                   ? (lastUpdated - lastViewed) > 2000  // only flag if > 2 seconds difference
@@ -926,6 +485,7 @@ const PatentDetailPage = () => {
   const keywords = Array.isArray(caseData?.keywords)
   ? caseData.keywords.map(k => k.charAt(0).toUpperCase() + k.slice(1)).join(', ')
   : caseData?.keywords || projectData.keywords || 'No keywords available';
+  const source         = caseData?.source || projectData.source || 'Unknown source';
   const description    = caseData?.context || caseData?.description || projectData.description || 'No description available';
   const matchesCount   = caseData?.infringements?.length ?? projectData.matchesCount ?? 0;
   const documentsCount = caseData?.documents?.length || projectData.documentsCount || 0;
@@ -934,7 +494,14 @@ const PatentDetailPage = () => {
   //const infringementAnalysisStatus = caseData?.infringementAnalysisStatus || 'unknown';
   const infringementAnalysisStatus = caseData?.infringement_analysis_status || 'unknown';
 
-  const displayClaims = caseData?.claims || [];
+  //const displayClaims = caseData?.claims || [];
+  const rawClaims = caseData?.claims;
+const displayClaims = rawClaims
+  ? (Array.isArray(rawClaims) ? rawClaims : Object.keys(rawClaims))
+  : [];
+
+  //const displayClaims = caseData?.claims || [];
+console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims, displayClaims?.length);
 
 
 
@@ -961,10 +528,16 @@ const PatentDetailPage = () => {
     const shouldShowMatches = realMatches.length > 0;
     const shouldShowEmpty   = !analysisLoading && realMatches.length === 0;
     // iaIsInFlight is only used for the polling — keep it for that
-    const iaStatus     = String(infringementAnalysisStatus || '').toLowerCase();
+    /*const iaStatus     = String(infringementAnalysisStatus || '').toLowerCase();
     const iaIsCompleted = iaStatus === 'completed';
     const iaIsUnknown  = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
-    const iaIsInFlight = !iaIsCompleted && !iaIsUnknown;
+    const iaIsInFlight = !iaIsCompleted && !iaIsUnknown;*/
+
+    const iaStatus      = String(infringementAnalysisStatus || '').toLowerCase();
+    const iaIsCompleted = iaStatus === 'completed';
+    const iaIsUnknown   = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
+    const iaIsFailed    = iaStatus.includes('failed');   // ← NEW
+    const iaIsInFlight  = !iaIsCompleted && !iaIsUnknown && !iaIsFailed;  // ← add !iaIsFailed
 
         const loadCase = useCallback(async () => {
           const c = await patentApi.getCaseById(caseId);
@@ -987,7 +560,7 @@ const PatentDetailPage = () => {
             }
 
             // ── Fetch & store claims if not already present ───────────────────────
-            const hasClaims = Array.isArray(c?.claims) && c.claims.length > 0;
+           /* const hasClaims = Array.isArray(c?.claims) && c.claims.length > 0;
             if (!hasClaims) {
               try {
                 const claims = await patentApi.getClaims(caseId);
@@ -999,7 +572,7 @@ const PatentDetailPage = () => {
                 console.warn('getClaims failed (non-blocking):', e.message);
               }
             }
-
+*/
             const hasInfringements = Array.isArray(c?.infringements) && c.infringements.length > 0;
             const hasClaims2 = Array.isArray(c?.claims) && c.claims.length > 0; 
 
@@ -1066,8 +639,7 @@ const PatentDetailPage = () => {
       console.log('🆔 caseData._id:', c?._id);           
       console.log('🏷️ getSourceName result:', getSourceName(c?._id || ''));     
 
-      console.log('🗂️ FULL caseData:', JSON.stringify(c, null, 2));
-
+      
       console.log('🗂️ caseData keys:', Object.keys(c));
       console.log('🗂️ caseData.claims:', c?.claims);
       console.log('🗂️ caseData.infringements:', c?.infringements);
@@ -1187,6 +759,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
     const country  = caseData?.countries?.[0] || 'US';
     const claims   = (caseData?.claims?.length > 0) ? caseData.claims : ['No claims available'];
     const owners   = caseData?.inventors || caseData?.companies || [];
+    const source   = caseData?.source || '';
 
     console.log('🔍 Analysis payload:', { keywords, document_urls: urls, context, country, claims, owners });
 
@@ -1217,7 +790,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
       const infringements = analysisData.similar_infringements || [];
       const newClaims     = analysisData.claims || [];
 
-      await patentApi.updateCase(caseId, { infringements, claims: newClaims });
+      //await patentApi.updateCase(caseId, { infringements, claims: newClaims });
 
       let claimsChart = {};
       if (newClaims.length > 0 && infringements.length > 0) {
@@ -1526,7 +1099,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
             <div className="pcard-top">
               <StatusPill status={status} />
               <span style={{ fontFamily: "'Inconsolata', monospace", fontSize: 11, color: 'var(--ink3)' }}>
-                {getSourceName(caseData?._id || '')}
+                {formatStatus(source)}
               </span>
             </div>
             <div className="pcard-title" style={{ fontSize: 13, textTransform: 'none', letterSpacing: 0 }}>{title}</div>
@@ -1589,9 +1162,20 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
               <InfoRow icon={Calendar} label="Created"      value={formatDate(caseData?.created_date || caseData?.createdAt) || updatedAt} />
               <InfoRow icon={FileText} label="Filed"        value={filedDate} />
               <InfoRow icon={Clock}    label="Last Updated" value={updatedAt} />
-              <InfoRow icon={User}     label="Inventors"    value={inventors} />
+              {/*<InfoRow icon={User}     label="Inventors"    value={inventors} />*/}
+              <EditableInventorsRow
+                    caseId={caseId}
+                    initialValue={
+                      Array.isArray(caseData?.inventors)
+                        ? caseData.inventors.join(', ')
+                        : caseData?.inventors || ''
+                    }
+                    onSave={(newInventors) =>
+                      setCaseData(prev => ({ ...prev, inventors: newInventors }))
+                    }
+                  />
               <InfoRow icon={Tag}      label="Keywords"     value={keywords} />
-              <InfoRow icon={Tag}      label="Source"       value={getSourceName(caseData?._id || '')} />
+              <InfoRow icon={Tag}      label="Source"       value={formatStatus(source)} />
             </SectionCard>
 
             {/* Context & Description — editable */}
@@ -1635,7 +1219,8 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
                 caseId={caseId}
                 initialData={caseData?.searchLimitations}
                 onSave={(data) =>
-                  setCaseData(prev => ({ ...prev, searchLimitations: data }))
+                  setCaseData(prev => ({ ...prev, 
+                    searchLimitations: data,keywords: data?.keywords ?? prev.keywords }))
                 }
               />
             </SectionCard>
@@ -1909,7 +1494,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
       <div className="pd-card-body">
         <ClaimsEditor
           caseId={caseId}
-          initialClaims={displayClaims}
+          initialClaims={rawClaims}
           onSave={(newClaims) => setCaseData(prev => ({ ...prev, claims: newClaims }))}
         />
       </div>
@@ -1998,6 +1583,25 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
     </div>
   </div>
 
+  {/* ── Infringement Sources ── */}
+  {caseData?.infringement_sources?.length > 0 && (
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+      marginBottom: 10, paddingLeft: 2,
+    }}>
+      <span style={{
+        fontFamily: "'Inconsolata', monospace", fontSize: 10,
+        textTransform: 'uppercase', letterSpacing: '0.10em',
+        color: 'var(--ink3)', flexShrink: 0, marginRight: 4,
+      }}>
+        Infringement sources
+      </span>
+      {caseData.infringement_sources.map((src, i) => (
+        <span key={i} className="pcard-num" style={{ margin: 0 }}>{src}</span>
+      ))}
+    </div>
+  )}
+
   {/* ── Filter tabs ── */}
   {matchesExpanded && (
     <div style={{
@@ -2054,8 +1658,40 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
         </div>
       )}
 
+      {/* CASE 1b: analysis failed on backend 
+{!analysisLoading && iaIsFailed && (
+  <div className="pd-card-body" style={{
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: 16, flexWrap: 'wrap', marginBottom: 16,
+    borderColor: 'rgba(178,34,34,0.25)',
+  }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span style={{ fontSize: 20 }}>⚠️</span>
+      <div>
+        <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', margin: '0 0 3px' }}>
+          Analysis failed
+        </p>
+        <p style={{
+          fontFamily: "'Inconsolata', monospace",
+          fontSize: 11, color: 'var(--ink3)', margin: 0,
+          textTransform: 'uppercase', letterSpacing: '0.08em',
+        }}>
+          {infringementAnalysisStatus}
+        </p>
+      </div>
+    </div>
+    <button className="btn-new" onClick={beginSimilarityAnalysis}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Retry Analysis
+    </button>
+  </div>
+)}*/}
+
       {/* CASE 2: analysis in-flight on backend */}
-      {!analysisLoading && iaIsInFlight && (
+      {!analysisLoading && iaIsInFlight  && (
         <div className="pd-card-body" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '24px', marginBottom: 16 }}>
           <div style={{
             width: 32, height: 32, flexShrink: 0,
@@ -2416,6 +2052,12 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
 
         @media (max-width: 900px) {
           .pd-sl-ri-row { grid-template-columns: 1fr; }
+        }
+          @media (max-width: 640px) {
+          .claims-v2-cols {
+            grid-template-columns: 1fr !important;
+            gap: 20px !important;
+          }
         }
       `}</style>
 
