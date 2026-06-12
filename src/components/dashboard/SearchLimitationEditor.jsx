@@ -243,6 +243,7 @@ const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
       console.log('💾 Saving search limitations payload', caseId, { companies, keywords, urls });
       await patentApi.updateCase(caseId, {
         searchLimitations: { companies, keywords, urls },
+        keywords: keywords,
       });
       onSave?.({ companies, keywords, urls });
       setSaved(true);
