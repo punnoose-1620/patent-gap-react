@@ -1,10 +1,18 @@
 import { useNavigate } from 'react-router-dom';
 
 const AnalysisStatusIcon = ({ status }) => {
-  const s = String(status || '').toLowerCase();
+  //const s = String(status || '').toLowerCase();
 
   // Loader for "started"
-  if (s === 'started') {
+  //if (s === 'started') {
+
+  const s = String(status || '').toLowerCase();
+
+const DONE = ['completed', 'patent sources completed', 'unknown', 'none', '', 'failed'];
+const isInFlight = !DONE.includes(s);
+
+if (isInFlight) {
+  
     return (
       <span
         title="Analysis in progress"
