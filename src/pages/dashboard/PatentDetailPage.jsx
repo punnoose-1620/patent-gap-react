@@ -1238,11 +1238,19 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
                         Array.isArray(item.value) ? item.value.length > 0 : Boolean(item.value)
                       )
                       .map((item, i, arr) => {
-                        const values = Array.isArray(item.value)
+                       /* const values = Array.isArray(item.value)
                           ? item.value
                           : item.value
                           ? [item.value]
-                          : [];
+                          : [];*/
+
+                          const values = Array.isArray(item.value)
+                            ? item.value.map(v => typeof v === 'object' ? JSON.stringify(v) : v)
+                            : item.value && typeof item.value === 'object'
+                            ? Object.values(item.value).flat().map(v => String(v))
+                            : item.value
+                            ? [String(item.value)]
+                            : [];
 
                         return (
                           <div
