@@ -1687,7 +1687,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
         </div>
       )}
 
-      {/* CASE 1b: analysis failed on backend 
+      {/* CASE 1b: analysis failed on backend */}
 {!analysisLoading && iaIsFailed && (
   <div className="pd-card-body" style={{
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1717,7 +1717,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
       Retry Analysis
     </button>
   </div>
-)}*/}
+)}
 
       {/* CASE 2: analysis in-flight on backend */}
       {!analysisLoading && iaIsInFlight  && (
@@ -1763,7 +1763,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
       )}
 
       {/* CASE 3: no matches for this filter tab */}
-      {!analysisLoading && !iaIsInFlight && filteredMatches.length === 0 && (
+      {!analysisLoading && !iaIsInFlight && !iaIsFailed && filteredMatches.length === 0 && (
         <div className="pd-card-body pd-no-matches">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>
