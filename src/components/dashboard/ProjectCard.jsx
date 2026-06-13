@@ -8,8 +8,9 @@ const AnalysisStatusIcon = ({ status }) => {
 
   const s = String(status || '').toLowerCase();
 
-const DONE = ['completed', 'patent sources completed', 'unknown', 'none', '', 'failed'];
-const isInFlight = !DONE.includes(s);
+
+const DONE = ['completed', 'patent sources completed', 'unknown', 'none', ''];
+const isInFlight = !DONE.includes(s) && !s.includes('failed');
 
 if (isInFlight) {
   
@@ -40,7 +41,8 @@ if (isInFlight) {
   }
 
   // Error icon
-  if (s === 'error') {
+  // Error icon
+if (s === 'failed' || s.includes('failed') || s === 'error') {
     return (
       <span
         title="Infringement analysis failed"
