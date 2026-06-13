@@ -534,7 +534,7 @@ console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims
     const iaIsInFlight = !iaIsCompleted && !iaIsUnknown;*/
 
     const iaStatus      = String(infringementAnalysisStatus || '').toLowerCase();
-    const iaIsCompleted = iaStatus === 'completed';
+    const iaIsCompleted = iaStatus === 'completed' || iaStatus === 'patent sources completed';
     const iaIsUnknown   = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
     const iaIsFailed    = iaStatus.includes('failed');   // ← NEW
     const iaIsInFlight  = !iaIsCompleted && !iaIsUnknown && !iaIsFailed;  // ← add !iaIsFailed
@@ -646,6 +646,8 @@ console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims
       console.log('🗂️ caseData.documents:', c?.documents);
       console.log('🗂️ caseData.infringementAnalysisStatus:', c?.infringement_analysis_status);
       console.log('🗂️ FULL caseData:', JSON.stringify(c, null, 2));
+
+      
 
 
         //  Add  for infringement analysis display
