@@ -548,7 +548,7 @@ console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims
           }
 
           // ── Generate description if missing or too short ──────────────────────
-            const desc   = c.description || '';
+          /*  const desc   = c.description || '';
             const status = c.status      || '';
             if (!desc || desc === status || desc.split(' ').length < 10) {
               try {
@@ -557,7 +557,7 @@ console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims
               } catch (e) {
                 console.warn('generateDescription failed (non-blocking):', e.message);
               }
-            }
+            }*/
 
             // ── Fetch & store claims if not already present ───────────────────────
            /* const hasClaims = Array.isArray(c?.claims) && c.claims.length > 0;
