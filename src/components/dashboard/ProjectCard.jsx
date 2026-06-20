@@ -1,22 +1,18 @@
 import { useNavigate } from 'react-router-dom';
+import {
+  isAnalysisFailed,
+  isAnalysisInFlight,
+  isAnalysisCompleted,
+  getAnalysisProgressMessage,
+} from '../../utils/infringementAnalysisStatus';
 
 const AnalysisStatusIcon = ({ status }) => {
-  //const s = String(status || '').toLowerCase();
+  const progress = getAnalysisProgressMessage(status);
 
-  // Loader for "started"
-  //if (s === 'started') {
-
-  const s = String(status || '').toLowerCase();
-
-
-const DONE = ['completed', 'patent sources completed', 'unknown', 'none', ''];
-const isInFlight = !DONE.includes(s) && !s.includes('failed');
-
-if (isInFlight) {
-  
+  if (isAnalysisInFlight(status)) {
     return (
       <span
-        title="Analysis in progress"
+        title={progress.detail}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -41,8 +37,7 @@ if (isInFlight) {
   }
 
   // Error icon
-  // Error icon
-if (s === 'failed' || s.includes('failed') || s === 'error') {
+if (isAnalysisFailed(status)) {
     return (
       <span
         title="Infringement analysis failed"

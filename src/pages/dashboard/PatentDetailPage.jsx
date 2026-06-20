@@ -21,6 +21,14 @@ import ClaimsMatrix from '../../components/dashboard/ClaimsMatrix';
 import ContextEditor from '../../components/dashboard/ContextEditor';
 import ClaimsEditor from '../../components/dashboard/ClaimsEditor';
 import EditableInventorsRow from '../../components/dashboard/EditableInventorsRow';
+import {
+  isAnalysisCompleted,
+  isAnalysisFailed,
+  isAnalysisInFlight,
+  isAnalysisUnknown,
+  isAnalysisTerminal,
+  getAnalysisProgressMessage,
+} from '../../utils/infringementAnalysisStatus';
 
 
 const getStatusShorthand = (status) => {
@@ -259,13 +267,7 @@ const normaliseMatch = (m) => {
 // Derive a human-readable label for an in-progress analysis status
 // ─────────────────────────────────────────────────────────────
 const getAnalysisStatusLabel = (status) => {
-  const s = String(status || '').toLowerCase();
-  if (s === 'pending')     return 'Analysis pending…';
-  if (s === 'processing')  return 'Processing analysis…';
-  if (s === 'running')     return 'Running infringement analysis…';
-  if (s === 'queued')      return 'Analysis queued…';
-  if (s === 'in_progress') return 'Analysis in progress…';
-  return `Analysis status: ${status}`;
+  return getAnalysisProgressMessage(status).title;
 };
 
 const StatusPill = ({ status }) => {
@@ -435,8 +437,7 @@ const PatentDetailPage = () => {
                  console.log(`⏰ Patent ${p._id}: last_viewed="${p.last_viewed}" →`, lastViewed, '; last_updated=', rawUpdated, '→', lastUpdated);
 
                   const isValid = (d) => d instanceof Date && !isNaN(d);
-                  const analysisStatus = String(p.infringement_analysis_status || '').toLowerCase();
-                  const analysisCompleted = analysisStatus === 'completed';
+                  const analysisCompleted = isAnalysisCompleted(p.infringement_analysis_status);
 
                 
                     // Instead of strict greater-than:
@@ -533,11 +534,11 @@ console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims
     const iaIsUnknown  = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
     const iaIsInFlight = !iaIsCompleted && !iaIsUnknown;*/
 
-    const iaStatus      = String(infringementAnalysisStatus || '').toLowerCase();
-    const iaIsCompleted = iaStatus === 'completed' || iaStatus === 'patent sources completed';
-    const iaIsUnknown   = iaStatus === 'unknown' || iaStatus === 'none' || iaStatus === '';
-    const iaIsFailed    = iaStatus.includes('failed');   // ← NEW
-    const iaIsInFlight  = !iaIsCompleted && !iaIsUnknown && !iaIsFailed;  // ← add !iaIsFailed
+    const iaIsCompleted = isAnalysisCompleted(infringementAnalysisStatus);
+    const iaIsUnknown   = isAnalysisUnknown(infringementAnalysisStatus);
+    const iaIsFailed    = isAnalysisFailed(infringementAnalysisStatus);
+    const iaIsInFlight  = isAnalysisInFlight(infringementAnalysisStatus);
+    const iaProgressMsg = getAnalysisProgressMessage(infringementAnalysisStatus);
 
         const loadCase = useCallback(async () => {
           const c = await patentApi.getCaseById(caseId);
@@ -673,9 +674,8 @@ console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims
       console.log('🔄 Poll — infringementAnalysisStatus:', c?.infringement_analysis_status);
       setCaseData(c);
 
-      const polledStatus = String(c?.infringement_analysis_status || '').toLowerCase();
-      if (polledStatus === 'completed') {
-        console.log('✅ Poll: analysis completed — stopping interval');
+      if (isAnalysisTerminal(c?.infringement_analysis_status)) {
+        console.log('✅ Poll: analysis reached terminal state — stopping interval');
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
@@ -686,11 +686,13 @@ console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims
 
  // ✅ Replace the polling useEffect
 useEffect(() => {
-  // Only poll when USER triggered analysis, not on page load
-  const shouldPoll = analysisLoading && !pageLoading;   // ← removed iaIsInFlight
+  const status = caseData?.infringement_analysis_status;
+  const shouldPoll =
+    !pageLoading &&
+    (analysisLoading || isAnalysisInFlight(status));
 
   if (shouldPoll && !pollIntervalRef.current) {
-    pollIntervalRef.current = setInterval(pollCaseDetails, 15 * 1000); // 15s not 2min
+    pollIntervalRef.current = setInterval(pollCaseDetails, 15 * 1000);
   }
 
   if (!shouldPoll && pollIntervalRef.current) {
@@ -704,7 +706,7 @@ useEffect(() => {
       pollIntervalRef.current = null;
     }
   };
-}, [analysisLoading, pageLoading, pollCaseDetails]);  // ← removed iaIsInFlight
+}, [analysisLoading, pageLoading, pollCaseDetails, caseData?.infringement_analysis_status]);
 
   useEffect(() => { fetchCaseDetails(); }, [fetchCaseDetails]);
 
@@ -1730,16 +1732,15 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
           }} />
           <div>
             <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', margin: '0 0 3px' }}>
-              Analysis in progress
+              {iaProgressMsg.title}
             </p>
             <p style={{
               fontFamily: "'Inconsolata', monospace",
               fontSize: 11, color: 'var(--ink3)', margin: 0,
-              textTransform: 'uppercase', letterSpacing: '0.08em',
+              letterSpacing: '0.04em',
             }}>
-              Status: {infringementAnalysisStatus}<br />
-              We are currently working hard to find the information and insights needed to protect your inventions.<br />
-              This analysis can take a while. We will notify you immediately once the results are ready.
+              {iaProgressMsg.detail}<br />
+              This analysis can take a while. We will notify you once the results are ready.
             </p>
           </div>
           <span style={{

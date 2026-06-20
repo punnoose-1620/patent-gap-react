@@ -13,6 +13,10 @@ import DashboardSidebar from '../../components/layout/DashboardSidebar';
 import NotificationBell from '../../components/dashboard/NotificationBell'; 
 import FetchBar from '../../components/dashboard/FetchBar';
 import { useUser } from '../../hooks/useUser';
+import {
+  isAnalysisInFlight,
+  isAnalysisCompleted,
+} from '../../utils/infringementAnalysisStatus';
 
 const getStatusShorthand = (status) => {
   status = String(status || '');
@@ -181,11 +185,9 @@ export default function DashboardPage() {
 
     useEffect(() => {
         // Only poll if any patent has an in-flight analysis
-        const hasInFlight = patents.patents.some(p => {
-          const s = String(p.infringement_analysis_status || '').toLowerCase();
-          return s !== 'completed' && s !== 'patent sources completed' && s !== '' && s !== 'unknown' && s !== 'none' && s !== 'failed';
-         // return s !== 'completed' && s !== '' && s !== 'unknown' && s !== 'none';
-        });
+        const hasInFlight = patents.patents.some(p =>
+          isAnalysisInFlight(p.infringement_analysis_status)
+        );
 
         if (!hasInFlight) return;
 
@@ -360,8 +362,7 @@ export default function DashboardPage() {
 
           const isValid = (d) => d instanceof Date && !isNaN(d);
 
-          const analysisStatus = String(p.infringement_analysis_status || '').toLowerCase();
-          const analysisCompleted = analysisStatus === 'completed' || analysisStatus === 'patent sources completed';
+          const analysisCompleted = isAnalysisCompleted(p.infringement_analysis_status);
 
         /*  const hasUpdates = analysisCompleted && isValid(lastUpdated) && isValid(lastViewed)
             ? lastUpdated > lastViewed
