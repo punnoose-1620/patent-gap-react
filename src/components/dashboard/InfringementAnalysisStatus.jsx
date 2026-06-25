@@ -1,5 +1,5 @@
 import { RefreshCw, Clock, CheckCircle2, XCircle } from 'lucide-react';
-
+import { isAnalysisInFlight } from '../../utils/infringementAnalysisStatus';
 // ─────────────────────────────────────────────────────────────
 // Pipeline stage order. Per spec: Asserted → Independent → Core → Pivotal.
 // "generic_claims_*" flags also exist in the data but weren't named in the
@@ -24,15 +24,26 @@ const flagKey = (stageKey, kind) => `${stageKey}_claims_${kind}_analysis`; // ki
  * respecting that a stage won't run if an earlier one Errored), and overall
  * state for that pipeline.
  */
-const deriveStageState = (flags, kind) => {
+const deriveStageState = (flags, kind, presentClaimTypes) => {
   if (!flags || typeof flags !== 'object') {
     return { state: 'unknown', currentStage: null, stages: [] };
   }
 
-  const stages = STAGE_ORDER.map(({ key, label }) => ({
-    key, label, status: flags[flagKey(key, kind)] || null, // null = not started / not applicable
-  }));
+  const stages = STAGE_ORDER
+    .filter(({ key }) => {
+      // Must exist in flags
+      if (!(flagKey(key, kind) in flags)) return false;
+      // If we have claim type info, the stage key must match a present claim type
+      if (presentClaimTypes && presentClaimTypes.length > 0) {
+        return presentClaimTypes.includes(key); // e.g. 'asserted', 'pivotal', 'core', 'independent', 'generic'
+      }
+      return true;
+    })
+    .map(({ key, label }) => ({
+      key, label, status: flags[flagKey(key, kind)] || null,
+    }));
 
+  
   // Find first stage that errored — pipeline halts there
   const erroredIdx = stages.findIndex(s => s.status === 'Error');
   if (erroredIdx !== -1) {
@@ -62,7 +73,9 @@ const deriveStageState = (flags, kind) => {
 
 const StageDots = ({ stages, accentVar }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-    {stages.map((s, i) => {
+    {stages
+    .filter(s => s.status !== null)
+    .map((s, i) => {
       const isDone = s.status === 'Completed';
       const isError = s.status === 'Error';
       const isActive = s.status === 'Started';
@@ -107,8 +120,9 @@ const AnalysisPipelinePanel = ({
   kind,            // 'patent' | 'product'
   timeTaken,       // e.g. "01h 10m 30s"
   accentVar = 'var(--accent)',
+  presentClaimTypes,
 }) => {
-  const { state, currentStage, stages, erroredAt } = deriveStageState(flags, kind);
+  const { state, currentStage, stages, erroredAt } = deriveStageState(flags, kind, presentClaimTypes);
 
   const headline =
     state === 'completed' ? `${title} analysis completed`
@@ -196,11 +210,15 @@ const InfringementAnalysisStatus = ({
   patentTimeTaken,          // caseData.patent_analysis_time_taken
   productTimeTaken,         // caseData.product_analysis_time_taken
   lastAnalysisDate,         // caseData.last_infringement_analysis_date
+  progressMsg,
+  presentClaimTypes,
   onRetry,
   formatDate,               // optional formatter fn(dateString) => string
 }) => {
   const overall = String(overallStatus || '').toLowerCase();
   const isFailed = overall === 'error';
+
+  const isInFlight = isAnalysisInFlight(overallStatus);
 
   const formattedDate = lastAnalysisDate
     ? (formatDate ? formatDate(lastAnalysisDate) : new Date(lastAnalysisDate).toLocaleString())
@@ -208,6 +226,50 @@ const InfringementAnalysisStatus = ({
 
   return (
     <div className="pd-card-body" style={{ marginBottom: 16 }}>
+
+       {isInFlight && progressMsg && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          marginBottom: 14, paddingBottom: 14,
+          borderBottom: '1px solid var(--rule2)',
+        }}>
+          <div style={{
+            width: 28, height: 28, flexShrink: 0,
+            border: '2.5px solid var(--rule2)',
+            borderTop: '2.5px solid var(--amber, #b45309)',
+            borderRadius: '50%',
+            animation: 'spin 1.2s linear infinite',
+          }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', margin: '0 0 2px' }}>
+              {progressMsg.title}
+            </p>
+            <p style={{
+              fontFamily: "'Inconsolata', monospace",
+              fontSize: 11, color: 'var(--ink3)', margin: 0,
+            }}>
+              {progressMsg.detail}
+            </p>
+          </div>
+          <span style={{
+            flexShrink: 0,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontFamily: "'Inconsolata', monospace",
+            fontSize: 10, fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: '0.10em',
+            padding: '4px 10px', borderRadius: 5,
+            background: 'var(--amber-soft, rgba(251,191,36,0.12))',
+            color: 'var(--amber, #b45309)',
+          }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: 'var(--amber, #b45309)',
+              animation: 'ia-pulse 1.4s ease-in-out infinite',
+            }} />
+            Processing
+          </span>
+        </div>
+      )}
 
       {/* ── Last-run summary strip ── */}
       {(formattedDate || patentTimeTaken || productTimeTaken) && (
@@ -246,6 +308,7 @@ const InfringementAnalysisStatus = ({
           kind="patent"
           timeTaken={patentTimeTaken}
           accentVar="var(--accent)"
+          presentClaimTypes={presentClaimTypes}
         />
         <AnalysisPipelinePanel
           title="Product"
@@ -254,6 +317,7 @@ const InfringementAnalysisStatus = ({
           kind="product"
           timeTaken={productTimeTaken}
           accentVar="var(--amber, #b45309)"
+          presentClaimTypes={presentClaimTypes}
         />
       </div>
 
