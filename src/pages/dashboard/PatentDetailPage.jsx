@@ -513,6 +513,30 @@ const displayClaims = rawClaims
 
   const rawClaims = caseData?.claims;
 
+
+  // Derive which claim types actually exist in the claims data
+  const presentClaimTypes = (() => {
+  if (!rawClaims) return null;
+  const values = Array.isArray(rawClaims)
+    ? rawClaims
+    : Object.values(rawClaims);
+  const types = values
+    .map(v => (typeof v === 'object' && v !== null ? v?.claim_type : null))
+    .filter(Boolean)
+    .map(t => 
+      String(t)
+        .toLowerCase()
+        .trim()
+        .replace(/_claim$/, '')   // ← strip trailing _claim: 'independent_claim' → 'independent'
+        .replace(/\s+claim$/, '') // ← also handle 'independent claim' → 'independent'
+    );
+  return types.length > 0 ? [...new Set(types)] : null;
+})();
+
+  console.log('🏷️ presentClaimTypes:', presentClaimTypes);
+console.log('🚩 patentStatusFlags:', patentStatusFlags);
+console.log('🚩 productStatusFlags:', productStatusFlags);
+
 // displayClaims: always a flat string array used for the legacy ClaimsMatrix tab
 // and for the ClaimsEditor. If claims is an object {"0":{documented_claim,...}},
 // pull the documented_claim string for each entry.
@@ -575,6 +599,8 @@ console.log('🔢 standard patent (entry_id, no nested infringements[]):',
     const iaIsInFlight  = isAnalysisInFlight(infringementAnalysisStatus);
     const iaProgressMsg = getAnalysisProgressMessage(infringementAnalysisStatus);
 
+    console.log('⚖️ infringementAnalysisStatus:', infringementAnalysisStatus, '; iaIsCompleted:', iaIsCompleted, '; iaIsUnknown:', iaIsUnknown, '; iaIsInFlight:', iaIsInFlight, '; iaProgressMsg:', iaProgressMsg);
+
         const loadCase = useCallback(async () => {
           const c = await patentApi.getCaseById(caseId);
           console.log('📦 Loaded case data:', c);
@@ -610,27 +636,42 @@ console.log('🔢 standard patent (entry_id, no nested infringements[]):',
             }
 */
             const hasInfringements = Array.isArray(c?.infringements) && c.infringements.length > 0;
-            const hasClaims2 = Array.isArray(c?.claims) && c.claims.length > 0; 
+           // const hasClaims2 = Array.isArray(c?.claims) && c.claims.length > 0; 
+           const hasClaims2 = c?.claims && (
+            (Array.isArray(c.claims) && c.claims.length > 0) ||
+            (typeof c.claims === 'object' && Object.keys(c.claims).length > 0)
+          );
 
 
           //const hasInfringements = Array.isArray(c?.infringements) && c.infringements.length > 0;
           //const hasClaims = Array.isArray(c?.claims) && c.claims.length > 0;
 
+          console.log('🔍 hasInfringements:', hasInfringements, '; hasClaims2:', hasClaims2);
+
           if (hasInfringements && hasClaims2) {
             if (needsInfringementChartApi(c.infringements)) {
+              console.log('🟡 needsInfringementChartApi = TRUE → calling API');
               try {
                 // Add a race with a timeout so it can't block forever 
                 //const chart = await patentApi.getInfringementChart(caseId, c.claims);
                 const chartPromise = patentApi.getInfringementChart(caseId);
                 const timeoutPromise = new Promise((_, reject) =>
-                  setTimeout(() => reject(new Error('Chart timeout')), 8000)
+                  setTimeout(() => reject(new Error('Chart timeout')), 60000)
                 );
                 const chart = await Promise.race([chartPromise, timeoutPromise]);
+                console.log('📊 chart output:', JSON.stringify(chart, null, 2));
                 if (chart && Object.keys(chart).length > 0) c.claimsChart = chart;
               } catch (e) { 
-                console.warn('Chart load skipped:', e.message);/* silent continue*/ }
+                console.warn('Chart load skipped:', e.message);/* silent continue*/
+              console.error('📛 Full chart error:', e);
+              console.error('📛 Error name:', e.name);
+              console.error('📛 Error stack:', e.stack);
+              }
+                
             } else {
+              console.log('🟢 needsInfringementChartApi = FALSE → using stored rows');
               const chart = buildClaimsChartFromStoredRows(c.infringements, c.claims);
+              console.log('📊 chart output (from stored rows):', JSON.stringify(chart, null, 2));
               if (Object.keys(chart).length > 0) c.claimsChart = chart;
             }
           }
@@ -796,7 +837,19 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
     const urls     = caseData?.documents?.map(d => d.url) || [];
     const context  = caseData?.context        || caseData?.description || '';
     const country  = caseData?.countries?.[0] || 'US';
-    const claims   = (caseData?.claims?.length > 0) ? caseData.claims : ['No claims available'];
+   // const claims   = (caseData?.claims?.length > 0) ? caseData.claims : ['No claims available'];
+    const claimsPayload = caseData?.claims;
+    const claims = (() => {
+      if (!claimsPayload) return ['No claims available'];
+      if (Array.isArray(claimsPayload) && claimsPayload.length > 0) return claimsPayload;
+      if (typeof claimsPayload === 'object') {
+        const flat = Object.values(claimsPayload)
+          .map(v => typeof v === 'object' ? (v.documented_claim ?? String(v)) : String(v))
+          .filter(Boolean);
+        return flat.length > 0 ? flat : ['No claims available'];
+      }
+      return ['No claims available'];
+    })();
     //const owners   = caseData?.inventors || caseData?.companies || [];
      const owners = (() => {
      const base = caseData?.inventors || [];
@@ -846,14 +899,14 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
 
       let claimsChart = {};
       if (newClaims.length > 0 && infringements.length > 0) {
-       // console.log('📊 Determining how to build claims chart for caseId:', caseId);
+       console.log('📊 Determining how to build claims chart for caseId:', caseId);
         if (needsInfringementChartApi(infringements)) {
-         // console.log('📊 Fetching claims chart from API for caseId:', caseId);
+          console.log('📊 Fetching claims chart from API for caseId:', caseId);
           try {
            claimsChart = await patentApi.getInfringementChart(caseId, newClaims) || {};
           } catch (e) { console.warn('Claims chart unavailable', e); }
         } else {
-          //console.log('📊 Building claims chart from stored rows for caseId:', caseId);
+          console.log('📊 Building claims chart from stored rows for caseId:', caseId);
            claimsChart = buildClaimsChartFromStoredRows(infringements, newClaims);
         }
       }
@@ -1746,6 +1799,8 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
           patentTimeTaken={patentTimeTaken}
           productTimeTaken={productTimeTaken}
           lastAnalysisDate={lastAnalysisDate}
+          progressMsg={iaProgressMsg}
+          presentClaimTypes={presentClaimTypes}
           onRetry={beginSimilarityAnalysis}
           formatDate={formatDate}
         />
