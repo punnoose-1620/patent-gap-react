@@ -21,6 +21,7 @@ import ClaimsMatrix from '../../components/dashboard/ClaimsMatrix';
 import ContextEditor from '../../components/dashboard/ContextEditor';
 import ClaimsEditor from '../../components/dashboard/ClaimsEditor';
 import EditableInventorsRow from '../../components/dashboard/EditableInventorsRow';
+import EditableTitleRow from '../../components/dashboard/EditableTitleRow';
 
 import {
   isAnalysisCompleted,
@@ -504,6 +505,7 @@ const PatentDetailPage = () => {
   const patentTimeTaken    = caseData?.patent_analysis_time_taken  || null;
   const productTimeTaken   = caseData?.product_analysis_time_taken || null;
   const lastAnalysisDate   = caseData?.last_infringement_analysis_date || null;
+  console.log('📅 lastAnalysisDate:', lastAnalysisDate);
 
   //const displayClaims = caseData?.claims || [];
   /*const rawClaims = caseData?.claims;
@@ -1151,9 +1153,13 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
           <div className="page-hd pd-page-hd">
             <div style={{ minWidth: 0, flex: 1 }}>
               <div className="page-eyebrow">Patent Detail</div>
-              <h1 className="page-title pd-page-title">
-                <em>{title}</em>
-              </h1>
+              <h1 className="page-title pd-page-title" style={{ margin: 0 }}>
+              <EditableTitleRow
+                caseId={caseId}
+                initialValue={title}
+                onSave={(newTitle) => setCaseData(prev => ({ ...prev, title: newTitle }))}
+              />
+            </h1>
             </div>
             <div className="hd-actions pd-hd-actions">
               <button className="tn-btn" onClick={() => navigate(-1)}>
