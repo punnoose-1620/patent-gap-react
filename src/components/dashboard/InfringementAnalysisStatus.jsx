@@ -285,7 +285,7 @@ const InfringementAnalysisStatus = ({
               <Clock size={12} />
               Last analysis: {formattedDate}
             </span>
-          )}
+          )}{/*
           {patentTimeTaken && (
             <span className="pcard-num" style={{ margin: 0 }}>
               Patent run · {patentTimeTaken}
@@ -295,7 +295,7 @@ const InfringementAnalysisStatus = ({
             <span className="pcard-num" style={{ margin: 0 }}>
               Product run · {productTimeTaken}
             </span>
-          )}
+          )}*/}
         </div>
       )}
 
