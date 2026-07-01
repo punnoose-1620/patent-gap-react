@@ -39,7 +39,7 @@ export function isLegacyAnalysisDone(status) {
 }
 
 export function isAnalysisInFlight(status) {
-  if (isAnalysisUnknown(status) || isAnalysisCompleted(status) || isAnalysisFailed(status)) {
+  if (isAnalysisUnknown(status) || isAnalysisCompleted(status) || isAnalysisFailed(status) || isAnalysisPartial(status)) {
     return false;
   }
   return true;
@@ -93,5 +93,5 @@ export function getAnalysisProgressMessage(status) {
 
 /** Stop polling when analysis reaches a terminal state. */
 export function isAnalysisTerminal(status) {
-  return isAnalysisCompleted(status) || isAnalysisFailed(status);
+  return isAnalysisCompleted(status) || isAnalysisFailed(status) || isAnalysisPartial(status);
 }
