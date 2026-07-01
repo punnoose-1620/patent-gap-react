@@ -30,6 +30,7 @@ import {
   isAnalysisUnknown,
   isAnalysisTerminal,
   getAnalysisProgressMessage,
+  isAnalysisPartial,
 } from '../../utils/infringementAnalysisStatus';
 
 import InfringementAnalysisStatus from '../../components/dashboard/InfringementAnalysisStatus';
@@ -175,6 +176,7 @@ const needsInfringementChartApi = (caseInfringements) => {
   // No infringements → no chart needed at all
   if (!Array.isArray(caseInfringements) || caseInfringements.length === 0) {
     return false;
+    
   }
   // Look inside the first infringement's nested infringements[]
   const nested = caseInfringements[0]?.infringements;
@@ -762,7 +764,7 @@ console.log('🔢 standard patent (entry_id, no nested infringements[]):',
     }
   }, [caseId, loadCase]);
 
- // ✅ Replace the polling useEffect
+
 useEffect(() => {
   const status = caseData?.infringement_analysis_status;
   const shouldPoll =
@@ -834,6 +836,56 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
     };
   }, [caseId, pageLoading]); // ← only re-runs if caseId changes
 
+  // ── Auto-reset analysis status to 'completed' when stale or both pipelines done ──
+useEffect(() => {
+  if (!caseData || pageLoading) return;
+
+  const currentStatus = caseData?.infringement_analysis_status || 'unknown';
+  const pTaken  = caseData?.patent_analysis_time_taken;
+  const prTaken = caseData?.product_analysis_time_taken;
+  const lastDate = caseData?.last_infringement_analysis_date;
+
+  const bothTimeTakenPresent =
+    pTaken  != null && pTaken  !== '' &&
+    prTaken != null && prTaken !== '';
+
+  // ── Case 1: both pipelines have a recorded finish time → definitely done ──
+  const bothDone = bothTimeTakenPresent;
+
+  // ── Case 2: status is stuck on a partial state ──
+  const isStuckPartial = isAnalysisPartial(currentStatus);
+
+  // ── Case 3: last analysis date is older than 6 hours → stale, reset it ──
+  const isOlderThan6h = lastDate
+    ? (Date.now() - new Date(lastDate).getTime()) > 6 * 60 * 60 * 1000
+    : false; // null lastDate = never run → don't reset
+
+  const shouldReset = bothDone || isStuckPartial || isOlderThan6h;
+
+  if (!shouldReset) return;
+  if (currentStatus === 'completed') return; // already correct, skip API call
+
+  console.log('🔄 Resetting analysis status → completed', {
+    bothDone, isStuckPartial, isOlderThan6h,
+    currentStatus, pTaken, prTaken, lastDate,
+  });
+
+  patentApi.updateCase(caseId, { infringement_analysis_status: 'completed' })
+    .then(() => setCaseData(prev => ({
+      ...prev,
+      infringement_analysis_status: 'completed',
+    })))
+    .catch(err => console.warn('Failed to reset analysis status:', err.message));
+
+}, [
+  caseId,
+  pageLoading,
+  caseData?.infringement_analysis_status,
+  caseData?.last_infringement_analysis_date,
+  caseData?.patent_analysis_time_taken,
+  caseData?.product_analysis_time_taken,
+]);
+
   const beginSimilarityAnalysis = async () => {
     const keywords = caseData?.keywords       || [];
     const urls     = caseData?.documents?.map(d => d.url) || [];
@@ -878,12 +930,19 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
     setAnalysisLoading(true);
     setAnalysisStatus('infringement');
 
+    // ── ADD  optimistically set status to in-flight ──
+    setCaseData(prev => ({
+      ...prev,
+      infringement_analysis_status: 'processing',
+    }));
+
+
     try {
       const analysisData  = await patentApi.getInfringementAnalysis(
         caseId, keywords, urls, context, country, claims, owners
       );
 
-      // ── ADD THIS GUARD ──
+      // ── GUARD ──
       if (!analysisData) {
         console.error('❌ getInfringementAnalysis returned undefined/null');
         alert('Analysis returned no data. Please check the API.');
@@ -913,7 +972,7 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
         }
       }
 
-      setCaseData(prev => ({ ...prev, infringements, claims: newClaims, claimsChart }));
+      setCaseData(prev => ({ ...prev, infringements, claims: newClaims, claimsChart,infringement_analysis_status: analysisData.infringement_analysis_status || prev.infringement_analysis_status, }));
       dispatch(updatePatent({ _id: caseId, infringements, claims: newClaims }));
 
     } catch (err) {
@@ -943,6 +1002,11 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
       const msg         = err?.response?.data?.message || err?.message || 'Unknown error';
       const isRateLimit = msg.toLowerCase().includes('rate') || msg.includes('429');
       //alert(isRateLimit ? 'Rate limit hit, please wait.' : `Analysis failed: ${msg}`);
+      // ── ADD THIS: on error reset status so UI doesn't show stale failed state ──
+      setCaseData(prev => ({
+        ...prev,
+        infringement_analysis_status: 'failed',
+      }));
     } finally {
       setAnalysisLoading(false);
       setAnalysisStatus('idle');
@@ -1330,8 +1394,30 @@ console.log('📅 Tracking last_viewed for caseId:', caseId);
                 caseId={caseId}
                 initialData={caseData?.searchLimitations}
                 onSave={(data) =>
-                  setCaseData(prev => ({ ...prev, 
-                    searchLimitations: data,keywords: data?.keywords ?? prev.keywords }))
+                  setCaseData(prev => {
+                    // ── Keywords that came from the previous search limitations save ──
+                    const prevLimitationKeywords = Array.isArray(prev.searchLimitations?.keywords)
+                      ? prev.searchLimitations.keywords
+                      : [];
+
+                    // ── Current metadata keywords, minus any that came from the old limitations ──
+                    // (so we don't keep deleted limitation keywords in metadata)
+                    const existingKeywords = Array.isArray(prev.keywords)
+                      ? prev.keywords.filter(k => !prevLimitationKeywords.includes(k))
+                      : prev.keywords
+                        ? [prev.keywords].filter(k => !prevLimitationKeywords.includes(k))
+                        : [];
+
+                    // ── Merge cleaned metadata keywords with new limitation keywords ──
+                    const newLimitationKeywords = Array.isArray(data?.keywords) ? data.keywords : [];
+                    const newKeywords = [...new Set([...existingKeywords, ...newLimitationKeywords])];
+
+                    return {
+                      ...prev,
+                      searchLimitations: data,
+                      keywords: newKeywords,
+                    };
+                  })
                 }
               />
             </SectionCard>
