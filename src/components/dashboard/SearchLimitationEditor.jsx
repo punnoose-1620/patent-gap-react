@@ -97,25 +97,35 @@ const TagInput = ({ tags, onAdd, onRemove, placeholder }) => {
   const inputRef = useRef();
 
   const commit = () => {
-    const v = raw.replace(/,$/, '').trim();
-    if (!v) return;
+    // ── Split on commas so "gear,cable" — whether typed fast, pasted,
+    //    or delivered by autofill as one chunk in a single onChange —
+    //    becomes two separate tags instead of one invalid string. ──
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return;
 
-    // ── Alphanumeric validation ──────────────────────────────
-    if (!ALPHANUMERIC_REGEX.test(v)) {
-      setTagError(`"${v}" — only letters, numbers, spaces, and - _ . & are allowed`);
+    const badParts = [];
+    parts.forEach(v => {
+      // ── Alphanumeric validation ──────────────────────────────
+      if (ALPHANUMERIC_REGEX.test(v)) {
+        onAdd(v);
+      } else {
+        badParts.push(v);
+      }
+    });
+
+    if (badParts.length) {
+      setTagError(`"${badParts.join('", "')}" — only letters, numbers, spaces, and - _ . & are allowed`);
       setTimeout(() => setTagError(''), 3200);
-      return;
+    } else {
+      setTagError('');
     }
-    // ────────────────────────────────────────────────────────
 
-    onAdd(v);
     setRaw('');
-    setTagError('');
   };
 
 
   return (
-    <div style={wrapStyle()} onClick={() => inputRef.current?.focus()}>
+    <div style={wrapStyle(!!tagError)} onClick={() => inputRef.current?.focus()}>
       {tags.map((v, i) => (
         <span key={i} style={tagStyle}>
           {v}
@@ -130,16 +140,31 @@ const TagInput = ({ tags, onAdd, onRemove, placeholder }) => {
       <input
         ref={inputRef}
         value={raw}
-        onChange={e => setRaw(e.target.value)}
+        onChange={e => { setRaw(e.target.value); if (tagError) setTagError(''); }}
         onKeyDown={e => {
           if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(); }
           if (e.key === 'Backspace' && !raw && tags.length) onRemove(tags.length - 1);
+        }}
+        onPaste={e => {
+          // ── Handle pasted comma-separated text immediately ──
+          const pasted = e.clipboardData?.getData('text');
+          if (pasted && pasted.includes(',')) {
+            e.preventDefault();
+            setRaw(prev => prev + pasted);
+            // commit on next tick so `raw` state has updated
+            setTimeout(commit, 0);
+          }
         }}
         onBlur={commit}
         placeholder={tags.length ? '' : placeholder}
         autoComplete="off"
         style={rawInputStyle}
       />
+      {tagError && (
+        <p style={{ width: '100%', fontSize: 11, color: 'var(--red)', margin: '4px 0 0', fontFamily: "'Inconsolata', monospace" }}>
+          ✗ {tagError}
+        </p>
+      )}
     </div>
   );
 };
@@ -151,16 +176,26 @@ const UrlTagInput = ({ tags, onAdd, onRemove }) => {
   const inputRef = useRef();
 
   const commit = () => {
-    const v = raw.replace(/,$/, '').trim();
-    if (!v) return;
-    if (!URL_REGEX.test(v)) {
-      setUrlError(`"${v}" is not a valid URL — try www.example.org or https://example.org`);
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return;
+
+    const badParts = [];
+    parts.forEach(v => {
+      if (URL_REGEX.test(v)) {
+        onAdd(v);
+      } else {
+        badParts.push(v);
+      }
+    });
+
+    if (badParts.length) {
+      setUrlError(`"${badParts.join('", "')}" is not a valid URL — try www.example.org or https://example.org`);
       setTimeout(() => setUrlError(''), 3200);
-      return;
+    } else {
+      setUrlError('');
     }
-    onAdd(v);
+
     setRaw('');
-    setUrlError('');
   };
 
   return (
@@ -184,6 +219,14 @@ const UrlTagInput = ({ tags, onAdd, onRemove }) => {
           onKeyDown={e => {
             if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(); }
             if (e.key === 'Backspace' && !raw && tags.length) onRemove(tags.length - 1);
+          }}
+          onPaste={e => {
+            const pasted = e.clipboardData?.getData('text');
+            if (pasted && pasted.includes(',')) {
+              e.preventDefault();
+              setRaw(prev => prev + pasted);
+              setTimeout(commit, 0);
+            }
           }}
           onBlur={commit}
           placeholder={tags.length ? '' : 'www.example.org — press Enter or comma'}
