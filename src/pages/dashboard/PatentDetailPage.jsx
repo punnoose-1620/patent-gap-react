@@ -176,7 +176,7 @@ const needsInfringementChartApi = (caseInfringements) => {
   // No infringements → no chart needed at all
   if (!Array.isArray(caseInfringements) || caseInfringements.length === 0) {
     return false;
-    
+
   }
   // Look inside the first infringement's nested infringements[]
   const nested = caseInfringements[0]?.infringements;
@@ -934,6 +934,10 @@ useEffect(() => {
     setCaseData(prev => ({
       ...prev,
       infringement_analysis_status: 'processing',
+      patent_status_flags: {},
+      product_status_flags: {},
+      patent_analysis_time_taken: null,
+      product_analysis_time_taken: null,
     }));
 
 
