@@ -600,8 +600,14 @@ console.log('🔢 standard patent (entry_id, no nested infringements[]):',
     const iaIsCompleted = isAnalysisCompleted(infringementAnalysisStatus);
     const iaIsUnknown   = isAnalysisUnknown(infringementAnalysisStatus);
     const iaIsFailed    = isAnalysisFailed(infringementAnalysisStatus);
-    const iaIsInFlight  = isAnalysisInFlight(infringementAnalysisStatus);
-    const iaProgressMsg = getAnalysisProgressMessage(infringementAnalysisStatus);
+   // const iaIsInFlight  = isAnalysisInFlight(infringementAnalysisStatus);
+    const hasActiveStage = (flags) =>
+      Object.values(flags || {}).some(v => v === 'Started');
+
+    const iaIsInFlight = isAnalysisInFlight(infringementAnalysisStatus)
+      || hasActiveStage(patentStatusFlags)
+      || hasActiveStage(productStatusFlags);
+        const iaProgressMsg = getAnalysisProgressMessage(infringementAnalysisStatus);
 
     console.log('⚖️ infringementAnalysisStatus:', infringementAnalysisStatus, '; iaIsCompleted:', iaIsCompleted, '; iaIsUnknown:', iaIsUnknown, '; iaIsInFlight:', iaIsInFlight, '; iaProgressMsg:', iaProgressMsg);
 
@@ -1397,6 +1403,7 @@ useEffect(() => {
               <SearchLimitationEditor
                 caseId={caseId}
                 initialData={caseData?.searchLimitations}
+                allKeywords={caseData?.keywords || []}
                 onSave={(data) =>
                   setCaseData(prev => {
                     // ── Keywords that came from the previous search limitations save ──
