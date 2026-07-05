@@ -256,7 +256,7 @@ const Field = ({ label, children }) => (
 );
 
 // ─── Main export ──────────────────────────────────────────────
-const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
+const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave }) => {
   const [companies, setCompanies] = useState(initialData?.companies || []);
   const [keywords,     setKeywords]     = useState(initialData?.keywords     || []);
   const [urls,      setUrls]      = useState(initialData?.urls      || []);
@@ -283,10 +283,16 @@ const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
       //alert('This will save the search limitations to the case. The infringement analysis will then exclude any patents matching these companies, keywords, or URLs.');
       setSaving(true);
       setSaveError(null);
-      console.log('💾 Saving search limitations payload', caseId, { companies, keywords, urls });
+      // ── Merge: keep existing case keywords that weren't part of the
+      //    previous search-limitation set, then add the current limitation keywords ──
+      const prevLimitationKeywords = initialData?.keywords || [];
+      const keptExistingKeywords = allKeywords.filter(k => !prevLimitationKeywords.includes(k));
+      const mergedKeywords = [...new Set([...keptExistingKeywords, ...keywords])];
+
+      console.log('💾 Saving search limitations payload', caseId, { companies, keywords, urls, mergedKeywords });
       await patentApi.updateCase(caseId, {
         searchLimitations: { companies, keywords, urls },
-        keywords: keywords,
+        keywords: mergedKeywords,   
       });
       onSave?.({ companies, keywords, urls });
       setSaved(true);
