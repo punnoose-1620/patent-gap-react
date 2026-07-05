@@ -299,7 +299,9 @@ const InfringementAnalysisStatus = ({
         </div>
       )}
 
-      {/* ── Dual parallel pipelines ── */}
+      
+      {/* ── Dual parallel pipelines — only show once real stage data exists ── */}
+  {(Object.keys(patentFlags || {}).length > 0 || Object.keys(productFlags || {}).length > 0) && (
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <AnalysisPipelinePanel
           title="Patent"
@@ -320,7 +322,7 @@ const InfringementAnalysisStatus = ({
           presentClaimTypes={presentClaimTypes}
         />
       </div>
-
+  )}
       {/* ── Retry action when overall status errored ── */}
       {isFailed && onRetry && (
         <div style={{
