@@ -27,6 +27,103 @@ const avgProductScore = (simRows = []) => {
   return Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100);
 };
 
+/**
+ * Normalizes claim text for comparison purposes only (never for display).
+ * ref_claim strings and claim rows are supposed to be the same text, but
+ * often pick up small drift — extra/irregular whitespace, smart quotes vs
+ * straight quotes, trailing newlines — somewhere in the pipeline (e.g. when
+ * claim text is re-serialized during an embedding/scoring step). A byte-exact
+ * Map lookup treats any of that as "no match" even though a human would call
+ * it the same claim. This collapses whitespace, straightens curly quotes,
+ * and lowercases before comparing, so real matches aren't silently dropped
+ * over formatting noise.
+ */
+const normalizeClaim = (s = '') =>
+  String(s)
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+
+    
+
+
+// ─── Debug: ref_claim matching diagnostics ─────────────────────────────────
+
+const firstDiffIndex = (a, b) => {
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) if (a[i] !== b[i]) return i;
+  return a.length === b.length ? -1 : len;
+};
+/**
+ * Canonical claim-row extraction — the ONLY place this logic lives.
+ * PatentMatrix, ProductMatrix, and the debug panel all call this, so
+ * they can never silently diverge on which field/format gets compared.
+ *
+ * - Flat array format: claims ARE just strings — used as-is. There's no
+ *   market-language/documented distinction to pick between.
+ * - Structured object format: pick documented_claim vs market_language_claim
+ *   based on `preference`, since only structured data actually has both.
+ */
+const getClaimRows = (claimsObj, preference = 'documented') => {
+  if (!claimsObj) return [];
+  if (Array.isArray(claimsObj)) return claimsObj; // flat format: no preference applies
+  return Object.values(claimsObj).map(v => {
+    if (typeof v !== 'object' || v === null) return String(v);
+    return preference === 'market'
+      ? (v.market_language_claim || v.documented_claim || '')
+      : (v.documented_claim || v.market_language_claim || '');
+  });
+};
+const debugRefClaimMatching = (claims, infringements) => {
+  const normClaims = claims.map(c => ({ raw: c, norm: normalizeClaim(c) }));
+  const rows = infringements.flatMap(inf => {
+    const arr = inf.infringements || inf.similar_claims || [];
+    const entryId = inf.product_id || inf.case_id || inf.entry_id || 'unknown';
+    return arr.map(r => ({ ...r, _entryId: entryId }));
+  });
+
+  let matched = 0;
+  const unmatched = [];
+
+  rows.forEach(row => {
+    const ref = row.ref_claim;
+    if (!ref) return;
+    const normRef = normalizeClaim(ref);
+    const hit = normClaims.find(c => c.norm === normRef);
+    if (hit) { matched++; return; }
+
+    let best = null, bestScore = -1;
+    normClaims.forEach(c => {
+      const d = firstDiffIndex(c.norm, normRef);
+      const score = d === -1 ? Math.max(c.norm.length, normRef.length) : d;
+      if (score > bestScore) { bestScore = score; best = c; }
+    });
+    unmatched.push({ entryId: row._entryId, ref, normRef, best, diffIndex: bestScore });
+  });
+
+  console.log(`✅ Matched: ${matched} / ${rows.length}`);
+  console.log(`❌ Unmatched: ${unmatched.length}`);
+  unmatched.forEach((u, i) => {
+    console.group(`Unmatched #${i + 1} — entry: ${u.entryId}`);
+    console.log('ref_claim (raw):        ', JSON.stringify(u.ref));
+    console.log('closest claim (raw):    ', JSON.stringify(u.best?.raw));
+    console.log('diverge at char index:  ', u.diffIndex);
+    if (u.best) {
+      const start = Math.max(0, u.diffIndex - 20);
+      console.log('ref  around divergence: ', JSON.stringify(u.normRef.slice(start, u.diffIndex + 30)));
+      console.log('claim around divergence:', JSON.stringify(u.best.norm.slice(start, u.diffIndex + 30)));
+    }
+    console.groupEnd();
+  });
+
+  return unmatched;
+};
+
+
+
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 const CheckIcon = ({ size = 20 }) => (
@@ -127,6 +224,25 @@ const MatrixTable = ({ claimRows, matches, getMatchSet, getScore, showScorePerCe
     () => matches.slice(firstVisible, lastVisible + 1),
     [matches, firstVisible, lastVisible]
   );
+
+  console.log('MatrixTable debug:', {
+  claimRowsLen: claimRows.length,
+  matchesLen: matches.length,
+  visibleLen: visibleMatches.length,
+  page, totalPages,
+  sampleHas: visibleMatches[0] ? getMatchSet(visibleMatches[0]).has(claimRows[0]) : null,
+});
+
+// ── extra: dump the raw strings being compared for claim #1 × match #1 ──
+if (claimRows[0] && visibleMatches[0]) {
+  const set0 = getMatchSet(visibleMatches[0]);
+  console.log('claimRows[0] (raw):', JSON.stringify(claimRows[0]));
+  console.log('claimRows[0] (normalized):', JSON.stringify(normalizeClaim(claimRows[0])));
+  // dump every key in match #1's score map so we can see what IS in there
+  if (visibleMatches[0]._scoreMap) {
+    console.log('match[0]._scoreMap keys:', [...visibleMatches[0]._scoreMap.keys()]);
+  }
+}
 
   // Reset any leftover horizontal scroll offset whenever the page or
   // density changes, so the new page always starts fully visible from
@@ -518,6 +634,9 @@ const navBtnStyle = (disabled) => ({
 
 // ─── Tab: Legacy (original ClaimsMatrix behaviour) ───────────────────────────
 // Matches ref_claim strings from either format against displayClaims strings.
+// NOTE: The "Coverage" tab that renders this component has been commented out
+// below (see the `tabs` array and the tab-content section in ClaimsMatrix).
+// LegacyMatrix itself is left intact/unused so it can be re-enabled easily.
 
 const LegacyMatrix = ({ displayClaims, potentialMatches }) => {
   const refClaimSets = potentialMatches.reduce((acc, match) => {
@@ -563,14 +682,9 @@ const LegacyMatrix = ({ displayClaims, potentialMatches }) => {
 // ─── Tab: Patent matrix ──────────────────────────────────────────────────────
 // Uses documented_claim (original patent language) vs patent infringements
 // that carry infringements[].ref_claim + calculated_similarity_score.
-
 const PatentMatrix = ({ claimsObj, infringements }) => {
   // claimsObj may be array of strings OR object {"0":{documented_claim,...}}
-  const docClaims = Array.isArray(claimsObj)
-    ? claimsObj
-    : Object.values(claimsObj || {}).map(v =>
-        typeof v === 'object' ? v.documented_claim || v : String(v)
-      );
+  const docClaims = getClaimRows(claimsObj, 'documented');
 
   const patentMatches = infringements.filter(
     inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
@@ -584,13 +698,17 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
     );
   }
 
-  // Build a Map<ref_claim → calculated_similarity_score> per match
+  // Build a Map<normalized ref_claim → calculated_similarity_score> per match.
+  // Keyed on normalizeClaim() rather than the raw string so minor whitespace/
+  // quote drift between ref_claim and the claim row doesn't cause a silent
+  // "no match" (see normalizeClaim's comment above for why this matters).
   const buildScoreMap = (inf) => {
     const map = new Map();
     (inf.infringements || []).forEach(row => {
       if (row.ref_claim) {
-        const existing = map.get(row.ref_claim) ?? 0;
-        map.set(row.ref_claim, Math.max(existing, row.calculated_similarity_score ?? 0));
+        const key = normalizeClaim(row.ref_claim);
+        const existing = map.get(key) ?? 0;
+        map.set(key, Math.max(existing, row.calculated_similarity_score ?? 0));
       }
     });
     return map;
@@ -605,13 +723,18 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
     _scoreMap: buildScoreMap(inf),
   })).map(m => ({ ...m, _colId: m._colIdLabel })); // keep display id readable; uniqueness handled via row index in keys
 
-  // getMatchSet returns a Map<claim→score> so the cell can render score inline
-  const getMatchSet = (m) => m._scoreMap;
+  // getMatchSet returns a normalization-aware wrapper: MatrixTable calls
+  // .has(claim) / .get(claim) with the RAW claim row text, so this normalizes
+  // that query the same way the map's keys were normalized when built.
+  const getMatchSet = (m) => ({
+    has: (claim) => m._scoreMap.has(normalizeClaim(claim)),
+    get: (claim) => m._scoreMap.get(normalizeClaim(claim)),
+  });
 
   const getScore = (m) => avgPatentScore(m.infringements || []);
 
   const totalMatches = docClaims.reduce((count, claim) =>
-    count + enriched.filter(m => m._scoreMap.has(claim)).length, 0);
+    count + enriched.filter(m => m._scoreMap.has(normalizeClaim(claim))).length, 0);
 
   return (
     <div style={{ width: '100%', maxWidth: '100%', minWidth: 0 }}>
@@ -635,25 +758,42 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
 };
 
 // ─── Tab: Product matrix ─────────────────────────────────────────────────────
-// Uses market_language_claim vs product infringements similar_claims[].claim.
+// Uses market_language_claim vs product infringements similar_claims[].ref_claim.
+// NOTE: now that product similar_claims rows carry a ref_claim (the exact
+// claim text they were compared against), we match claim-to-claim exactly
+// the same way PatentMatrix does — no more rank/index guessing.
+//
+// FALLBACK FOR OLD/FLAT CLAIMS FORMAT: when claims come in as a plain array
+// of strings (the old format — no market_language_claim/documented_claim
+// object structure), there's no "market language" to extract. Rather than
+// blocking the whole tab with a "not available" message even when real
+// product matches exist, we fall back to matching ref_claim directly against
+// that flat claim-string array — identical in spirit to how the very first
+// ClaimsMatrix version (and PatentMatrix's docClaims) always worked: direct
+// ref_claim → claim-string matching, no market-language distinction needed.
 
 const ProductMatrix = ({ claimsObj, infringements }) => {
   const isObjClaims = !Array.isArray(claimsObj) && typeof claimsObj === 'object' && claimsObj !== null;
 
-  const mktClaims = isObjClaims
-    ? Object.values(claimsObj).map(v =>
-        typeof v === 'object' ? v.market_language_claim || v.documented_claim || '' : String(v)
-      )
-    : []; // no market language if claims is a plain string array
+  // Structured object form → prefer market_language_claim (falls back to
+  // documented_claim per-entry if that specific entry lacks it).
+  // Flat array form (old format) → use the claim strings as-is, same as
+  // PatentMatrix's docClaims fallback.
+  const claimRows = getClaimRows(claimsObj, 'market');
 
-  const productMatches = infringements.filter(
+  const usingMarketLanguage = isObjClaims;
+
+  /*const productMatches = infringements.filter(
     inf => inf.product_id && Array.isArray(inf.similar_claims)
-  );
+  );*/
+  const productMatches = infringements.filter(
+  inf => inf.product_id && Array.isArray(inf.infringements)
+);
 
-  if (!isObjClaims || !mktClaims.length) {
+  if (!claimRows.length) {
     return (
       <p style={{ fontSize: 13, color: 'var(--ink3)', fontStyle: 'italic' }}>
-        Market language claims are only available when the patent has structured claims with <code>market_language_claim</code> fields.
+        No claims available to match against.
       </p>
     );
   }
@@ -666,39 +806,61 @@ const ProductMatrix = ({ claimsObj, infringements }) => {
     );
   }
 
-  // For each product match, build a Set of product-claim strings that scored ≥ 0.5
-  // Then map each market_language_claim row by its index rank to the top product claims
-  const enriched = productMatches.map((inf, idx) => {
-    const topClaims = (inf.similar_claims || [])
-      .filter(sc => (sc.similarity_score ?? 0) >= 0.5)
-      .sort((a, b) => (b.similarity_score ?? 0) - (a.similarity_score ?? 0));
-
-    const indexScoreMap = new Map();
-    topClaims.forEach((sc, i) => {
-      if (i < mktClaims.length) {
-        indexScoreMap.set(mktClaims[i], sc.similarity_score ?? 0);
+  // Build a Map<normalized ref_claim → similarity_score> per product, same
+  // normalization approach as PatentMatrix's buildScoreMap — keyed on
+  // normalizeClaim() so minor whitespace/quote drift between ref_claim and
+  // the claim row (very common with old flat-format claims run through a
+  // scoring pipeline) doesn't cause a silent "no match".
+  /*const buildProductScoreMap = (inf) => {
+    const map = new Map();
+    (inf.similar_claims || []).forEach(row => {
+      if (row.ref_claim) {
+        const key = normalizeClaim(row.ref_claim);
+        const score = row.similarity_score ?? row.calculated_similarity_score ?? 0;
+        const existing = map.get(key) ?? 0;
+        map.set(key, Math.max(existing, score));
       }
     });
+    return map;
+  };*/
 
-    return {
-      ...inf,
-      _colId: inf.product_id || `product-${idx}`,
-      _colLabel: inf.product_name || inf.product_id,
-      _colSub: (inf.source || '').toUpperCase(),
-      _indexScoreMap: indexScoreMap,
-    };
+  const buildProductScoreMap = (inf) => {
+  const map = new Map();
+  (inf.infringements || []).forEach(row => {
+    if (row.ref_claim) {
+      const key = normalizeClaim(row.ref_claim);
+      const score = row.calculated_similarity_score ?? row.similarity_score ?? 0;
+      const existing = map.get(key) ?? 0;
+      map.set(key, Math.max(existing, score));
+    }
+  });
+  return map;
+};
+
+  const enriched = productMatches.map((inf, idx) => ({
+    ...inf,
+    _colId: inf.product_id || `product-${idx}`,
+    _colLabel: inf.product_name || inf.product_id,
+    _colSub: (inf.source || '').toUpperCase(),
+    _scoreMap: buildProductScoreMap(inf),
+  }));
+
+  // Normalization-aware wrapper, same reasoning as PatentMatrix's getMatchSet.
+  const getMatchSet = (m) => ({
+    has: (claim) => m._scoreMap.has(normalizeClaim(claim)),
+    get: (claim) => m._scoreMap.get(normalizeClaim(claim)),
   });
 
-  const getMatchSet = (m) => m._indexScoreMap;
-  const getScore = (m) => avgProductScore(m.similar_claims || []);
+  //const getScore = (m) => avgProductScore(m.similar_claims || []);
+  const getScore = (m) => avgProductScore(m.infringements || []);
 
-  const totalMatches = mktClaims.reduce((count, mkt) =>
-    count + enriched.filter(m => m._indexScoreMap.has(mkt)).length, 0);
+  const totalMatches = claimRows.reduce((count, c) =>
+    count + enriched.filter(m => m._scoreMap.has(normalizeClaim(c))).length, 0);
 
   return (
     <div style={{ width: '100%', maxWidth: '100%', minWidth: 0 }}>
       <MatrixTable
-        claimRows={mktClaims}
+        claimRows={claimRows}
         matches={enriched}
         getMatchSet={getMatchSet}
         getScore={getScore}
@@ -710,7 +872,7 @@ const ProductMatrix = ({ claimsObj, infringements }) => {
         marginTop: 8, paddingLeft: 4, paddingRight: 4,
         whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere',
       }}>
-        Rows = market language · product claims matched by score rank (≥50%) · {totalMatches} pair{totalMatches !== 1 ? 's' : ''} across {productMatches.length} product{productMatches.length !== 1 ? 's' : ''}
+        Rows = {usingMarketLanguage ? 'market language' : 'patent claims (flat format)'} · matched to product claims via ref_claim · {totalMatches} pair{totalMatches !== 1 ? 's' : ''} across {productMatches.length} product{productMatches.length !== 1 ? 's' : ''}
       </p>
     </div>
   );
@@ -719,7 +881,58 @@ const ProductMatrix = ({ claimsObj, infringements }) => {
 // ─── Main component ──────────────────────────────────────────────────────────
 
 const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfringements = [] }) => {
-  const [activeTab, setActiveTab] = useState('legacy');
+  // Coverage (legacy) tab commented out. No hardcoded default tab anymore —
+  // whichever tab(s) actually have data drive what's shown (see resolvedTab
+  // below), so a case with ONLY product matches shows Product matrix straight
+  // away, and a case with ONLY patent matches shows Patent matrix straight
+  // away, with no tab bar and no manual switching needed.
+  const [activeTab, setActiveTab] = useState(null);
+
+ // ── Debug: log ref_claim match/mismatch diagnostics whenever data changes ──
+  // Runs the SAME extraction (getClaimRows) that each real tab uses, split
+  // by tab, so this can never silently disagree with what's on screen.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+
+    const patentInf = rawInfringements.filter(
+      inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
+    );
+   /* const productInf = rawInfringements.filter(
+      inf => inf.product_id && Array.isArray(inf.similar_claims)
+    );*/
+
+    const productInf = rawInfringements.filter(
+  inf => inf.product_id && Array.isArray(inf.infringements)
+);
+
+    if (patentInf.length) {
+      console.log('── Patent tab ──');
+      debugRefClaimMatching(getClaimRows(rawClaimsObj ?? displayClaims, 'documented'), patentInf);
+    }
+    if (productInf.length) {
+      console.log('── Product tab ──');
+      debugRefClaimMatching(getClaimRows(rawClaimsObj ?? displayClaims, 'market'), productInf);
+    }
+  }, [rawClaimsObj, displayClaims, rawInfringements]);
+useEffect(() => {
+  if (process.env.NODE_ENV === 'production') return;
+
+  const patentInf = rawInfringements.filter(
+    inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
+  );
+  const productInf = rawInfringements.filter(
+    inf => inf.product_id && Array.isArray(inf.similar_claims)
+  );
+
+  if (patentInf.length) {
+    console.log('── Patent tab ──');
+    debugRefClaimMatching(getClaimRows(rawClaimsObj ?? displayClaims, 'documented'), patentInf);
+  }
+  if (productInf.length) {
+    console.log('── Product tab ──');
+    debugRefClaimMatching(getClaimRows(rawClaimsObj ?? displayClaims, 'market'), productInf);
+  }
+}, [rawClaimsObj, displayClaims, rawInfringements]);
 
   // Determine which tabs have data
   const hasLegacy = potentialMatches?.length > 0 && displayClaims?.length > 0;
@@ -728,11 +941,18 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
     inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
   );
 
-  const hasProductTab = rawInfringements.some(inf => inf.product_id && Array.isArray(inf.similar_claims));
-  const hasObjClaims  = rawClaimsObj && !Array.isArray(rawClaimsObj) && typeof rawClaimsObj === 'object';
+  //const hasProductTab = rawInfringements.some(inf => inf.product_id && Array.isArray(inf.similar_claims));
+  const hasProductTab = rawInfringements.some(inf => inf.product_id && Array.isArray(inf.infringements));
+  // NOTE: hasObjClaims is no longer required to *show* the Product tab —
+  // ProductMatrix already renders its own "market language only available…"
+  // message internally when claims aren't in structured object form. Gating
+  // tab visibility on it too meant a product-only case with flat claims fell
+  // through to the Patent tab's "no patent matches" message instead, which
+  // was confusing and hid the real (product) data.
+  const hasObjClaims = rawClaimsObj && !Array.isArray(rawClaimsObj) && typeof rawClaimsObj === 'object';
 
   // Total count for header badge
-  const totalMatches = (() => {
+  /*const totalMatches = (() => {
     if (!displayClaims?.length || !potentialMatches?.length) return 0;
     const refClaimSets = potentialMatches.reduce((acc, m) => {
       acc[m.id] = new Set((m.similarClaims || []).map(sc => sc.ref_claim).filter(Boolean));
@@ -740,18 +960,68 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
     }, {});
     return displayClaims.reduce((count, c) =>
       count + potentialMatches.filter(m => refClaimSets[m.id]?.has(c)).length, 0);
-  })();
+  })();*/
 
   if (!hasLegacy && !hasPatentTab && !hasProductTab) return null;
 
   const tabs = [
-    hasLegacy   && { key: 'legacy',   label: 'Coverage',        sub: 'ref_claim match' },
-    hasPatentTab && { key: 'patent',   label: 'Patent matrix',   sub: 'original language' },
-    (hasProductTab && hasObjClaims) && { key: 'product', label: 'Product matrix', sub: 'market language' },
+    // Coverage tab (ref_claim match) — commented out per request.
+    // hasLegacy   && { key: 'legacy',   label: 'Coverage',        sub: 'ref_claim match' },
+    hasPatentTab  && { key: 'patent',  label: 'Patent matrix',  sub: 'original language' },
+    hasProductTab && {
+      key: 'product',
+      label: 'Product matrix',
+      // Reflect what ProductMatrix will actually use: structured claims give
+      // real market-language rows, flat/old-format claims fall back to the
+      // plain claim strings (see ProductMatrix's claimRows fallback above).
+      sub: hasObjClaims ? 'market language' : 'original language',
+    },
   ].filter(Boolean);
 
-  // If activeTab got removed (e.g. no data), fall back to first available
-  const resolvedTab = tabs.find(t => t.key === activeTab)?.key || tabs[0]?.key || 'legacy';
+  // Pick whichever tab actually has data: prefer the user's manual selection
+  // if it's still valid, otherwise fall back to the first (only) available
+  // tab. This is what makes a patent-only or product-only case render its
+  // single matrix directly, with no tab bar shown (see tabs.length > 1 below).
+  const resolvedTab = tabs.find(t => t.key === activeTab)?.key || tabs[0]?.key || null;
+
+  // Total count for header badge — now reflects the ACTUAL resolved tab's
+// real match data (rawInfringements), not the unrelated legacy
+// potentialMatches/displayClaims props.
+const totalMatches = useMemo(() => {
+  if (resolvedTab === 'patent') {
+    const docClaims = getClaimRows(rawClaimsObj ?? displayClaims, 'documented');
+    const patentInf = rawInfringements.filter(
+      inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
+    );
+    const maps = patentInf.map(inf => {
+      const set = new Set();
+      (inf.infringements || []).forEach(row => {
+        if (row.ref_claim) set.add(normalizeClaim(row.ref_claim));
+      });
+      return set;
+    });
+    return docClaims.reduce((count, c) =>
+      count + maps.filter(s => s.has(normalizeClaim(c))).length, 0);
+  }
+
+  if (resolvedTab === 'product') {
+    const claimRows = getClaimRows(rawClaimsObj ?? displayClaims, 'market');
+    const productInf = rawInfringements.filter(
+      inf => inf.product_id && Array.isArray(inf.infringements)
+    );
+    const maps = productInf.map(inf => {
+      const set = new Set();
+      (inf.infringements || []).forEach(row => {
+        if (row.ref_claim) set.add(normalizeClaim(row.ref_claim));
+      });
+      return set;
+    });
+    return claimRows.reduce((count, c) =>
+      count + maps.filter(s => s.has(normalizeClaim(c))).length, 0);
+  }
+
+  return 0;
+}, [resolvedTab, rawClaimsObj, displayClaims, rawInfringements]);
 
   return (
     <div style={{ marginBottom: 20, width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box', overflowX: 'hidden' }}>
@@ -778,8 +1048,16 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
         </div>
       </div>
 
-      {/* ── Tab bar ── */}
-      {tabs.length > 1 && (
+      {/* ── Tab bar ──
+          Always rendered, even when there's only one tab. With a single
+          matrix type available (e.g. products only, as in the case that
+          prompted this), the "tab" still shows as a label so the user can
+          see which matrix ("Patent matrix" / "Product matrix") they're
+          looking at — it just won't be clickable-away-from since there's
+          nothing else to switch to. Previously this was hidden whenever
+          tabs.length <= 1, which left a product-only or patent-only matrix
+          rendering with no indication of what it was. */}
+      {tabs.length > 0 && (
         <div style={{
           display: 'flex', gap: 0, marginBottom: 14, flexWrap: 'wrap',
           borderBottom: '1px solid var(--rule2)',
@@ -791,7 +1069,8 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
                 padding: '7px 14px',
-                background: 'none', border: 'none', cursor: 'pointer',
+                background: 'none', border: 'none',
+                cursor: tabs.length > 1 ? 'pointer' : 'default',
                 fontFamily: "'Inconsolata', monospace",
                 color: resolvedTab === tab.key ? 'var(--accent)' : 'var(--ink3)',
                 borderBottom: resolvedTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
@@ -811,12 +1090,14 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
       )}
 
       {/* ── Tab content ── */}
+      {/* Coverage (legacy) tab content — commented out per request.
       {resolvedTab === 'legacy' && (
         <LegacyMatrix
           displayClaims={displayClaims}
           potentialMatches={potentialMatches}
         />
       )}
+      */}
 
       {resolvedTab === 'patent' && (
         <PatentMatrix
