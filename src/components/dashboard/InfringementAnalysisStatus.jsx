@@ -24,7 +24,7 @@ const flagKey = (stageKey, kind) => `${stageKey}_claims_${kind}_analysis`; // ki
  * respecting that a stage won't run if an earlier one Errored), and overall
  * state for that pipeline.
  */
-const deriveStageState = (flags, kind, presentClaimTypes) => {
+const deriveStageState = (flags, kind, presentClaimTypes, isFlatClaimsArray) => {
   if (!flags || typeof flags !== 'object') {
     return { state: 'unknown', currentStage: null, stages: [] };
   }
@@ -33,6 +33,12 @@ const deriveStageState = (flags, kind, presentClaimTypes) => {
     .filter(({ key }) => {
       // Must exist in flags
       if (!(flagKey(key, kind) in flags)) return false;
+
+      // ── Flat array claims → only the generic stage is ever run ──
+      if (isFlatClaimsArray) {
+        return key === 'generic';
+      }
+
       // If we have claim type info, the stage key must match a present claim type
       if (presentClaimTypes && presentClaimTypes.length > 0) {
         return presentClaimTypes.includes(key); // e.g. 'asserted', 'pivotal', 'core', 'independent', 'generic'
@@ -121,8 +127,9 @@ const AnalysisPipelinePanel = ({
   timeTaken,       // e.g. "01h 10m 30s"
   accentVar = 'var(--accent)',
   presentClaimTypes,
+  isFlatClaimsArray,
 }) => {
-  const { state, currentStage, stages, erroredAt } = deriveStageState(flags, kind, presentClaimTypes);
+  const { state, currentStage, stages, erroredAt } = deriveStageState(flags, kind, presentClaimTypes, isFlatClaimsArray);
 
   const headline =
     state === 'completed' ? `${title} analysis completed`
@@ -212,6 +219,7 @@ const InfringementAnalysisStatus = ({
   lastAnalysisDate,         // caseData.last_infringement_analysis_date
   progressMsg,
   presentClaimTypes,
+  isFlatClaimsArray,
   onRetry,
   formatDate,               // optional formatter fn(dateString) => string
 }) => {
@@ -311,6 +319,7 @@ const InfringementAnalysisStatus = ({
           timeTaken={patentTimeTaken}
           accentVar="var(--accent)"
           presentClaimTypes={presentClaimTypes}
+          isFlatClaimsArray={isFlatClaimsArray}
         />
         <AnalysisPipelinePanel
           title="Product"
@@ -320,6 +329,7 @@ const InfringementAnalysisStatus = ({
           timeTaken={productTimeTaken}
           accentVar="var(--amber, #b45309)"
           presentClaimTypes={presentClaimTypes}
+          isFlatClaimsArray={isFlatClaimsArray}
         />
       </div>
   )}
