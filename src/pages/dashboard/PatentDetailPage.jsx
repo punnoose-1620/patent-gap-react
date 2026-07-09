@@ -193,8 +193,22 @@ const flattenInfringementScoreRows = (caseInfringements) =>
     Array.isArray(entry?.infringements) ? entry.infringements : []
   );
 
-const buildClaimsChartFromStoredRows = (caseInfringements, parentClaims = []) =>
-  normalizeChartRowsToMap(flattenInfringementScoreRows(caseInfringements), parentClaims);
+ /* const flattenInfringementScoreRows = (caseInfringements) =>
+  (caseInfringements || []).flatMap((entry) =>
+    (entry.infringements || []).map(row => ({
+      ...row,
+      entry_id: entry.entry_title || entry.product_name || entry.case_id,
+    }))
+  );*/
+
+//const buildClaimsChartFromStoredRows = (caseInfringements, parentClaims = []) =>
+  //normalizeChartRowsToMap(flattenInfringementScoreRows(caseInfringements), parentClaims);
+const buildClaimsChartFromStoredRows = (caseInfringements, parentClaims = []) => {
+  const flattenedRows = flattenInfringementScoreRows(caseInfringements);
+  console.log('🔎 flattenInfringementScoreRows output:', flattenedRows);
+  console.log('🔎 flattened rows count:', flattenedRows.length);
+  return normalizeChartRowsToMap(flattenedRows, parentClaims);
+};
 
 // ─────────────────────────────────────────────────────────────
 // Normalise a raw infringement object into a consistent shape
@@ -517,6 +531,8 @@ const displayClaims = rawClaims
 
   const rawClaims = caseData?.claims;
 
+// true when claims come in as a flat string array ──
+const isFlatClaimsArray = Array.isArray(rawClaims);
 
   // Derive which claim types actually exist in the claims data
   const presentClaimTypes = (() => {
@@ -659,6 +675,7 @@ console.log('🔢 standard patent (entry_id, no nested infringements[]):',
           console.log('🔍 hasInfringements:', hasInfringements, '; hasClaims2:', hasClaims2);
 
           if (hasInfringements && hasClaims2) {
+            console.log('need chart', needsInfringementChartApi(c.infringements));
             if (needsInfringementChartApi(c.infringements)) {
               console.log('🟡 needsInfringementChartApi = TRUE → calling API');
               try {
@@ -1904,6 +1921,7 @@ useEffect(() => {
           lastAnalysisDate={lastAnalysisDate}
           progressMsg={iaProgressMsg}
           presentClaimTypes={presentClaimTypes}
+          isFlatClaimsArray={isFlatClaimsArray}
           onRetry={beginSimilarityAnalysis}
           formatDate={formatDate}
         />
