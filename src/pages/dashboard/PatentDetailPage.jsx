@@ -22,6 +22,7 @@ import ContextEditor from '../../components/dashboard/ContextEditor';
 import ClaimsEditor from '../../components/dashboard/ClaimsEditor';
 import EditableInventorsRow from '../../components/dashboard/EditableInventorsRow';
 import EditableTitleRow from '../../components/dashboard/EditableTitleRow';
+import EditableKeywordsRow from '../../components/dashboard/EditableKeywordsRow';
 
 import {
   isAnalysisCompleted,
@@ -1376,7 +1377,15 @@ useEffect(() => {
                       setCaseData(prev => ({ ...prev, inventors: newInventors }))
                     }
                   />
-              <InfoRow icon={Tag}      label="Keywords"     value={keywords} />
+              {/*<InfoRow icon={Tag}      label="Keywords"     value={keywords} />*/}
+              <EditableKeywordsRow
+                caseId={caseId}
+                icon={Tag}
+                label="Keywords"
+                initialValue={caseData?.keywords ?? projectData.keywords ?? []}
+                onSave={(newKeywords) => setCaseData(prev => ({ ...prev, keywords: newKeywords }))}
+              />
+              
               <InfoRow icon={Tag}      label="Source"       value={formatStatus(source)} />
             </SectionCard>
 
@@ -1417,37 +1426,16 @@ useEffect(() => {
 
             {/* ── Search Limitations ── */}
             <SectionCard title="Search Limitations" eyebrow="User Defined" icon={Search}>
-              <SearchLimitationEditor
-                caseId={caseId}
-                initialData={caseData?.searchLimitations}
-                allKeywords={caseData?.keywords || []}
-                onSave={(data) =>
-                  setCaseData(prev => {
-                    // ── Keywords that came from the previous search limitations save ──
-                    const prevLimitationKeywords = Array.isArray(prev.searchLimitations?.keywords)
-                      ? prev.searchLimitations.keywords
-                      : [];
-
-                    // ── Current metadata keywords, minus any that came from the old limitations ──
-                    // (so we don't keep deleted limitation keywords in metadata)
-                    const existingKeywords = Array.isArray(prev.keywords)
-                      ? prev.keywords.filter(k => !prevLimitationKeywords.includes(k))
-                      : prev.keywords
-                        ? [prev.keywords].filter(k => !prevLimitationKeywords.includes(k))
-                        : [];
-
-                    // ── Merge cleaned metadata keywords with new limitation keywords ──
-                    const newLimitationKeywords = Array.isArray(data?.keywords) ? data.keywords : [];
-                    const newKeywords = [...new Set([...existingKeywords, ...newLimitationKeywords])];
-
-                    return {
+                <SearchLimitationEditor
+                  caseId={caseId}
+                  initialData={caseData?.searchLimitations}
+                  onSave={(data) =>
+                    setCaseData(prev => ({
                       ...prev,
                       searchLimitations: data,
-                      keywords: newKeywords,
-                    };
-                  })
-                }
-              />
+                    }))
+                  }
+                />
             </SectionCard>
 
             {/* ── Related IDs ── */}
