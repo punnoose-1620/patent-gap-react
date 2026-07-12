@@ -36,77 +36,117 @@ const getClaimTypes = (entries) => {
 };
 
 // ────────────────────────────────────────────────────────────
-// V2 — Read-only column
+// V2 — Paired-row read-only grid
+// Renders BOTH columns' cells for the same claim as siblings in
+// one CSS grid row, so the row height auto-stretches to whichever
+// side is taller — the two sides can never drift out of sync.
 // ────────────────────────────────────────────────────────────
-const V2Column = ({ label, entries, field, onEdit }) => (
-  <div style={{ flex: 1, minWidth: 0 }}>
+const V2PairedGrid = ({ entries, onEdit }) => (
+  <div>
+    {/* ── Header row: labels, same 2-col grid as the rows below ── */}
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: 24,
       marginBottom: 14,
     }}>
-      <span style={{
-        display: 'inline-block',
-        border: '1.5px solid var(--rule2)',
-        borderRadius: 6,
-        padding: '4px 12px',
-        fontFamily: "'Inconsolata', monospace",
-        fontSize: 11, fontWeight: 700,
-        textTransform: 'uppercase', letterSpacing: '0.08em',
-        color: 'var(--ink2)',
-        background: 'var(--bg)',
-      }}>
-        {label}
-      </span>
-      {onEdit && (
-        <button
-          onClick={onEdit}
-          title={`Edit ${label}`}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: 4, borderRadius: 5, color: 'var(--ink3)',
-            display: 'flex', alignItems: 'center', transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--ink3)'}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-        </button>
-      )}
-    </div>
-
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {entries.map((entry, i) => (
-        <p key={entry.idx} style={{
-          fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.65,
-          padding: '10px 0',
-          borderBottom: i < entries.length - 1 ? '1px solid var(--rule2)' : 'none',
-          margin: 0,
+      {['Original Claims', 'Market Language Claims'].map((label, i) => (
+        <div key={label} style={{
+          display: 'flex', alignItems: 'center',
+          justifyContent: i === 1 ? 'space-between' : 'flex-start',
         }}>
           <span style={{
-            fontFamily: "'Inconsolata', monospace", fontSize: 10,
-            color: 'var(--ink3)', marginRight: 8,
+            display: 'inline-block',
+            border: '1.5px solid var(--rule2)',
+            borderRadius: 6,
+            padding: '4px 12px',
+            fontFamily: "'Inconsolata', monospace",
+            fontSize: 11, fontWeight: 700,
             textTransform: 'uppercase', letterSpacing: '0.08em',
+            color: 'var(--ink2)',
+            background: 'var(--bg)',
           }}>
-            {entry.idx + 1}.
+            {label}
           </span>
-          {entry[field] || <em style={{ color: 'var(--ink3)' }}>—</em>}
-        </p>
+          {i === 1 && onEdit && (
+            <button
+              onClick={onEdit}
+              title="Edit claims"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 4, borderRadius: 5, color: 'var(--ink3)',
+                display: 'flex', alignItems: 'center', transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--ink3)'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          )}
+        </div>
       ))}
+    </div>
+
+    {/* ── Paired rows ──
+        Grid auto-flow places children left-to-right, wrapping into a
+        new row every 2 items. Each row's height auto-sizes to its
+        tallest cell, so left/right always line up per-claim without
+        any JS height measurement. ── */}
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '0 24px',
+    }}>
+      {entries.flatMap((entry, i) => {
+        const isLast = i === entries.length - 1;
+        const cellStyle = {
+          fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.65,
+          padding: '10px 0',
+          borderBottom: isLast ? 'none' : '1px solid var(--rule2)',
+          margin: 0,
+        };
+        return [
+          <p key={`${entry.idx}-doc`} style={cellStyle}>
+            <span style={{
+              fontFamily: "'Inconsolata', monospace", fontSize: 10,
+              color: 'var(--ink3)', marginRight: 8,
+              textTransform: 'uppercase', letterSpacing: '0.08em',
+            }}>
+              {entry.idx + 1}.
+            </span>
+            {entry.documented_claim || <em style={{ color: 'var(--ink3)' }}>—</em>}
+          </p>,
+          <p key={`${entry.idx}-market`} style={cellStyle}>
+            <span style={{
+              fontFamily: "'Inconsolata', monospace", fontSize: 10,
+              color: 'var(--ink3)', marginRight: 8,
+              textTransform: 'uppercase', letterSpacing: '0.08em',
+            }}>
+              {entry.idx + 1}.
+            </span>
+            {entry.market_language_claim || <em style={{ color: 'var(--ink3)' }}>—</em>}
+          </p>,
+        ];
+      })}
     </div>
   </div>
 );
 
 // ────────────────────────────────────────────────────────────
-// V2 — Edit modal/inline for one column
+// V2 — Paired-row edit grid
+// Same row-per-claim structure as V2PairedGrid, but each cell is a
+// textarea instead of a <p>. Grid auto-sizing keeps both textareas'
+// rows visually aligned, and a single Save commits both fields
+// together.
 // ────────────────────────────────────────────────────────────
-const V2EditPanel = ({ entries, field, label, onCancel, onSave, saving }) => {
+const V2EditPanel = ({ entries, onCancel, onSave, saving }) => {
   const [localEntries, setLocalEntries] = useState(entries.map(e => ({ ...e })));
 
-  const update = (idx, value) =>
+  const update = (idx, field, value) =>
     setLocalEntries(prev => prev.map(e => e.idx === idx ? { ...e, [field]: value } : e));
 
   return (
@@ -116,16 +156,39 @@ const V2EditPanel = ({ entries, field, label, onCancel, onSave, saving }) => {
         textTransform: 'uppercase', letterSpacing: '0.10em',
         color: 'var(--ink3)', marginBottom: 12,
       }}>
-        Editing: {label}
+        Editing claims
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-        {localEntries.map((entry, i) => (
-          <div key={entry.idx} style={{
+      {/* ── Header labels, same 2-col grid as the rows below ── */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12,
+        marginBottom: 10,
+      }}>
+        {['Original Claims', 'Market Language Claims'].map(label => (
+          <span key={label} style={{
+            fontFamily: "'Inconsolata', monospace", fontSize: 10, fontWeight: 700,
+            textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink3)',
+          }}>
+            {label}
+          </span>
+        ))}
+      </div>
+
+      {/* ── Paired rows: doc textarea + market textarea per claim ──
+          Emitted as flat siblings (not two nested loops) so grid
+          auto-flow keeps them on the same row and the same height. */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gap: '10px 12px', marginBottom: 12,
+      }}>
+        {localEntries.flatMap((entry) => {
+          const rowStyle = {
             display: 'flex', gap: 8, alignItems: 'flex-start',
             background: 'var(--surf2)', borderRadius: 8,
             padding: '10px 12px', border: '1px solid var(--rule2)',
-          }}>
+            boxSizing: 'border-box', height: '100%',
+          };
+          const badge = (
             <span style={{
               fontFamily: "'Inconsolata', monospace", fontSize: 10, fontWeight: 700,
               color: 'var(--accent)', background: 'var(--acc-soft)',
@@ -134,29 +197,47 @@ const V2EditPanel = ({ entries, field, label, onCancel, onSave, saving }) => {
             }}>
               {entry.idx + 1}
             </span>
-            <textarea
-              value={entry[field] || ''}
-              onChange={e => update(entry.idx, e.target.value)}
-              rows={3}
-              style={{
-                flex: 1, boxSizing: 'border-box',
-                padding: '6px 8px', fontSize: 13,
-                fontFamily: 'inherit', lineHeight: 1.65,
-                color: 'var(--ink)', background: 'var(--bg)',
-                border: '1.5px solid var(--rule2)',
-                borderRadius: 5, resize: 'vertical', outline: 'none',
-                transition: 'border-color 0.15s',
-              }}
-              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-              onBlur={e  => e.target.style.borderColor = 'var(--rule2)'}
-            />
-          </div>
-        ))}
+          );
+          const taStyle = {
+            flex: 1, boxSizing: 'border-box',
+            padding: '6px 8px', fontSize: 13,
+            fontFamily: 'inherit', lineHeight: 1.65,
+            color: 'var(--ink)', background: 'var(--bg)',
+            border: '1.5px solid var(--rule2)',
+            borderRadius: 5, resize: 'vertical', outline: 'none',
+            transition: 'border-color 0.15s',
+            minHeight: '100%',
+          };
+          return [
+            <div key={`${entry.idx}-doc`} style={rowStyle}>
+              {badge}
+              <textarea
+                value={entry.documented_claim || ''}
+                onChange={e => update(entry.idx, 'documented_claim', e.target.value)}
+                rows={3}
+                style={taStyle}
+                onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                onBlur={e  => e.target.style.borderColor = 'var(--rule2)'}
+              />
+            </div>,
+            <div key={`${entry.idx}-market`} style={rowStyle}>
+              {badge}
+              <textarea
+                value={entry.market_language_claim || ''}
+                onChange={e => update(entry.idx, 'market_language_claim', e.target.value)}
+                rows={3}
+                style={taStyle}
+                onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                onBlur={e  => e.target.style.borderColor = 'var(--rule2)'}
+              />
+            </div>,
+          ];
+        })}
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <button
-          onClick={() => onSave(localEntries, field)}
+          onClick={() => onSave(localEntries)}
           disabled={saving}
           className="btn-new"
           style={{ opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
@@ -190,12 +271,12 @@ const V2EditPanel = ({ entries, field, label, onCancel, onSave, saving }) => {
 };
 
 // ────────────────────────────────────────────────────────────
-// V2 renderer — tabs + two columns
+// V2 renderer — tabs + paired grid
 // ────────────────────────────────────────────────────────────
 const ClaimsEditorV2 = ({ caseId, initialClaims, onSave }) => {
   const [claimsObj, setClaimsObj]       = useState(initialClaims);
   const [activeType, setActiveType]     = useState(null);
-  const [editField, setEditField]       = useState(null); // 'documented_claim' | 'market_language_claim' | null
+  const [isEditing, setIsEditing]       = useState(false);
   const [saving, setSaving]             = useState(false);
   const [saveError, setSaveError]       = useState(null);
 
@@ -211,19 +292,23 @@ const ClaimsEditorV2 = ({ caseId, initialClaims, onSave }) => {
     ? allEntries.filter(e => (e.claim_type || 'Other').trim() === currentType)
     : allEntries;
 
-  const handleSave = async (updatedEntries, field) => {
+  const handleSave = async (updatedEntries) => {
     try {
       setSaving(true);
       setSaveError(null);
       // Merge edits back into claimsObj
       const next = { ...claimsObj };
       updatedEntries.forEach(entry => {
-        next[entry.idx] = { ...next[entry.idx], [field]: entry[field] };
+        next[entry.idx] = {
+          ...next[entry.idx],
+          documented_claim: entry.documented_claim,
+          market_language_claim: entry.market_language_claim,
+        };
       });
       await patentApi.updateCase(caseId, { claims: next });
       setClaimsObj(next);
       onSave(next);
-      setEditField(null);
+      setIsEditing(false);
     } catch (err) {
       setSaveError(err?.message || 'Failed to save. Please try again.');
     } finally {
@@ -241,7 +326,7 @@ const ClaimsEditorV2 = ({ caseId, initialClaims, onSave }) => {
         {claimTypes.map(type => (
           <button
             key={type}
-            onClick={() => { setActiveType(type); setEditField(null); }}
+            onClick={() => { setActiveType(type); setIsEditing(false); }}
             style={{
               display: 'flex', alignItems: 'center', gap: 7,
               padding: '8px 16px',
@@ -285,38 +370,20 @@ const ClaimsEditorV2 = ({ caseId, initialClaims, onSave }) => {
         </p>
       )}
 
-      {/* ── Edit panel (replaces columns when active) ── */}
-      {editField ? (
+      {/* ── Edit panel (replaces the paired grid when active) ── */}
+      {isEditing ? (
         <V2EditPanel
           entries={filteredEntries}
-          field={editField}
-          label={editField === 'documented_claim' ? 'Original Claims' : 'Market Language Claims'}
           saving={saving}
-          onCancel={() => setEditField(null)}
+          onCancel={() => setIsEditing(false)}
           onSave={handleSave}
         />
       ) : (
-        /* ── Two-column read view ── */
-       <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1px 1fr',
-          gap: '0 24px',
-        }}>
-          <V2Column
-            label="Original Claims"
-            entries={filteredEntries}
-            field="documented_claim"
-            onEdit={() => setEditField('documented_claim')}
-          />
-          <div style={{ background: 'var(--rule2)' }} />
-          <V2Column
-            label="Market Language Claims"
-            entries={filteredEntries}
-            field="market_language_claim"
-            onEdit={() => setEditField('market_language_claim')}
-          />
-          
-        </div>
+        /* ── Paired read view ── */
+        <V2PairedGrid
+          entries={filteredEntries}
+          onEdit={() => setIsEditing(true)}
+        />
       )}
     </div>
   );
