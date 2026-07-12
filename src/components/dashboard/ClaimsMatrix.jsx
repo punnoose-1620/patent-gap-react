@@ -77,6 +77,27 @@ const getClaimRows = (claimsObj, preference = 'documented') => {
       : (v.documented_claim || v.market_language_claim || '');
   });
 };
+
+/**
+ * Merges infringement records that share the same key (case_id or
+ * product_id) into one, concatenating their `infringements` rows.
+ * Prevents the same patent/product from rendering as two separate
+ * columns (and double-counting matches) if it appears more than once
+ * in rawInfringements.
+ */
+const mergeByKey = (list, keyField) => {
+  const map = new Map();
+  list.forEach(inf => {
+    const key = inf[keyField];
+    if (!key) return;
+    if (!map.has(key)) {
+      map.set(key, { ...inf, infringements: [...(inf.infringements || [])] });
+    } else {
+      map.get(key).infringements.push(...(inf.infringements || []));
+    }
+  });
+  return [...map.values()];
+};
 const debugRefClaimMatching = (claims, infringements) => {
   const normClaims = claims.map(c => ({ raw: c, norm: normalizeClaim(c) }));
   const rows = infringements.flatMap(inf => {
@@ -485,7 +506,7 @@ if (claimRows[0] && visibleMatches[0]) {
               {visibleMatches.map((m, mIdx) => {
                 const pct = getScore(m);
                 return (
-                  <th key={`${m._colId}-${firstVisible + mIdx}`} style={{
+                  <th key={m._colKey ?? `${m._colId}-${firstVisible + mIdx}`} style={{
                     padding: compact ? '6px 3px' : '8px 6px', textAlign: 'center',
                     fontFamily: "'Inconsolata', monospace", fontSize: compact ? 8 : 9, fontWeight: 600,
                     textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent)',
@@ -557,7 +578,7 @@ if (claimRows[0] && visibleMatches[0]) {
                     const isMatched = set.has(claim);
                     const cellScore = showScorePerCell && isMatched ? (set.get ? set.get(claim) : null) : null;
                     return (
-                      <td key={`${m._colId}-${firstVisible + mIdx}`} style={{
+                      <td key={m._colKey ?? `${m._colId}-${firstVisible + mIdx}`} style={{
                         padding: compact ? '6px 3px' : '8px 6px', textAlign: 'center',
                         borderBottom: '1px solid var(--rule2)', borderRight: '1px solid var(--rule2)',
                         verticalAlign: 'middle',
@@ -686,8 +707,14 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
   // claimsObj may be array of strings OR object {"0":{documented_claim,...}}
   const docClaims = getClaimRows(claimsObj, 'documented');
 
-  const patentMatches = infringements.filter(
+  /*const patentMatches = infringements.filter(
     inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
+  );*/
+  const patentMatches = mergeByKey(                       // ← wrap here
+    infringements.filter(
+      inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
+    ),
+    'case_id'
   );
 
   if (!patentMatches.length) {
@@ -714,7 +741,7 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
     return map;
   };
 
-  const enriched = patentMatches.map((inf, idx) => ({
+  /*const enriched = patentMatches.map((inf, idx) => ({
     ...inf,
     _colId: inf.case_id ? `${inf.case_id}-${idx}` : `patent-${idx}`,
     _colIdLabel: inf.case_id || `patent-${idx}`,
@@ -722,7 +749,15 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
     _colSub: (inf.source || '').toUpperCase(),
     _scoreMap: buildScoreMap(inf),
   })).map(m => ({ ...m, _colId: m._colIdLabel })); // keep display id readable; uniqueness handled via row index in keys
-
+*/
+const enriched = patentMatches.map((inf, idx) => ({
+  ...inf,
+  _colId: inf.case_id || `patent-${idx}`,     // display label (can repeat)
+  _colKey: inf.case_id ? `${inf.case_id}-${idx}` : `patent-${idx}`, // always unique
+  _colLabel: inf.entry_title || inf.title || inf.case_id,
+  _colSub: (inf.source || '').toUpperCase(),
+  _scoreMap: buildScoreMap(inf),
+}));
   // getMatchSet returns a normalization-aware wrapper: MatrixTable calls
   // .has(claim) / .get(claim) with the RAW claim row text, so this normalizes
   // that query the same way the map's keys were normalized when built.
@@ -745,14 +780,38 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
         getScore={getScore}
         showScorePerCell
       />
-      <p style={{
+      {/*<p style={{
         fontSize: 10, color: 'var(--ink3)', fontFamily: "'Inconsolata', monospace",
         textTransform: 'uppercase', letterSpacing: '0.08em',
         marginTop: 8, paddingLeft: 4, paddingRight: 4,
         whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere',
       }}>
         Cell scores = embedding cosine similarity · {totalMatches} claim-match pair{totalMatches !== 1 ? 's' : ''} across {patentMatches.length} patent{patentMatches.length !== 1 ? 's' : ''}
-      </p>
+      </p>*/}
+
+      <p style={{
+  fontSize: 10, color: 'var(--ink3)', fontFamily: "'Inconsolata', monospace",
+  textTransform: 'uppercase', letterSpacing: '0.08em',
+  marginTop: 8, paddingLeft: 4, paddingRight: 4,
+  whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere',
+  display: 'flex', alignItems: 'center', gap: 5,
+}}>
+  <span>
+    Cell scores = similarity strength · {totalMatches} claim match{totalMatches !== 1 ? 'es' : ''} found across {patentMatches.length} patent{patentMatches.length !== 1 ? 's' : ''}
+  </span>
+  <span
+    title="Each row is a claim from your patent. A checkmark in a column means our analysis found that claim's language closely matching a claim in that competing patent. The percentage shows how similar the two claims are, scored by AI comparison of their wording — the higher the percentage, the closer the overlap."
+    style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: 12, height: 12, borderRadius: '50%',
+      border: '1px solid var(--ink3)', color: 'var(--ink3)',
+      fontSize: 8, fontWeight: 700, cursor: 'help', flexShrink: 0,
+      fontFamily: "'Inconsolata', monospace",
+    }}
+  >
+    ?
+  </span>
+</p>
     </div>
   );
 };
@@ -786,9 +845,15 @@ const ProductMatrix = ({ claimsObj, infringements }) => {
   /*const productMatches = infringements.filter(
     inf => inf.product_id && Array.isArray(inf.similar_claims)
   );*/
-  const productMatches = infringements.filter(
+  /*const productMatches = infringements.filter(
   inf => inf.product_id && Array.isArray(inf.infringements)
-);
+);*/
+const productMatches = mergeByKey(                      // ← wrap here
+    infringements.filter(
+      inf => inf.product_id && Array.isArray(inf.infringements)
+    ),
+    'product_id'
+  );
 
   if (!claimRows.length) {
     return (
@@ -839,7 +904,8 @@ const ProductMatrix = ({ claimsObj, infringements }) => {
 
   const enriched = productMatches.map((inf, idx) => ({
     ...inf,
-    _colId: inf.product_id || `product-${idx}`,
+    _colId: inf.product_id || `product-${idx}`,          // display
+    _colKey: inf.product_id ? `${inf.product_id}-${idx}` : `product-${idx}`, // unique key
     _colLabel: inf.product_name || inf.product_id,
     _colSub: (inf.source || '').toUpperCase(),
     _scoreMap: buildProductScoreMap(inf),
@@ -866,7 +932,7 @@ const ProductMatrix = ({ claimsObj, infringements }) => {
         getScore={getScore}
         showScorePerCell
       />
-      <p style={{
+    {/* <p style={{
         fontSize: 10, color: 'var(--ink3)', fontFamily: "'Inconsolata', monospace",
         textTransform: 'uppercase', letterSpacing: '0.08em',
         marginTop: 8, paddingLeft: 4, paddingRight: 4,
@@ -874,6 +940,31 @@ const ProductMatrix = ({ claimsObj, infringements }) => {
       }}>
         Rows = {usingMarketLanguage ? 'market language' : 'patent claims (flat format)'} · matched to product claims via ref_claim · {totalMatches} pair{totalMatches !== 1 ? 's' : ''} across {productMatches.length} product{productMatches.length !== 1 ? 's' : ''}
       </p>
+*/}
+      <p style={{
+        fontSize: 10, color: 'var(--ink3)', fontFamily: "'Inconsolata', monospace",
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        marginTop: 8, paddingLeft: 4, paddingRight: 4,
+        whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere',
+        display: 'flex', alignItems: 'center', gap: 5,
+      }}>
+        <span>
+          Rows = {usingMarketLanguage ? 'market language' : 'patent claims'} · {totalMatches} claim match{totalMatches !== 1 ? 'es' : ''} found across {productMatches.length} product{productMatches.length !== 1 ? 's' : ''}
+        </span>
+        <span
+          title="Each row is a claim from your patent. A checkmark in a product's column means our analysis found that exact claim text referenced in that product's source material — this is what we internally call a ref_claim match."
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 12, height: 12, borderRadius: '50%',
+            border: '1px solid var(--ink3)', color: 'var(--ink3)',
+            fontSize: 8, fontWeight: 700, cursor: 'help', flexShrink: 0,
+            fontFamily: "'Inconsolata', monospace",
+          }}
+        >
+          ?
+        </span>
+      </p>
+
     </div>
   );
 };
@@ -902,8 +993,8 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
     );*/
 
     const productInf = rawInfringements.filter(
-  inf => inf.product_id && Array.isArray(inf.infringements)
-);
+      inf => inf.product_id && Array.isArray(inf.infringements)
+    );
 
     if (patentInf.length) {
       console.log('── Patent tab ──');
@@ -914,25 +1005,7 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
       debugRefClaimMatching(getClaimRows(rawClaimsObj ?? displayClaims, 'market'), productInf);
     }
   }, [rawClaimsObj, displayClaims, rawInfringements]);
-useEffect(() => {
-  if (process.env.NODE_ENV === 'production') return;
 
-  const patentInf = rawInfringements.filter(
-    inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
-  );
-  const productInf = rawInfringements.filter(
-    inf => inf.product_id && Array.isArray(inf.similar_claims)
-  );
-
-  if (patentInf.length) {
-    console.log('── Patent tab ──');
-    debugRefClaimMatching(getClaimRows(rawClaimsObj ?? displayClaims, 'documented'), patentInf);
-  }
-  if (productInf.length) {
-    console.log('── Product tab ──');
-    debugRefClaimMatching(getClaimRows(rawClaimsObj ?? displayClaims, 'market'), productInf);
-  }
-}, [rawClaimsObj, displayClaims, rawInfringements]);
 
   // Determine which tabs have data
   const hasLegacy = potentialMatches?.length > 0 && displayClaims?.length > 0;
@@ -965,18 +1038,15 @@ useEffect(() => {
   if (!hasLegacy && !hasPatentTab && !hasProductTab) return null;
 
   const tabs = [
-    // Coverage tab (ref_claim match) — commented out per request.
-    // hasLegacy   && { key: 'legacy',   label: 'Coverage',        sub: 'ref_claim match' },
-    hasPatentTab  && { key: 'patent',  label: 'Patent matrix',  sub: 'original language' },
-    hasProductTab && {
-      key: 'product',
-      label: 'Product matrix',
-      // Reflect what ProductMatrix will actually use: structured claims give
-      // real market-language rows, flat/old-format claims fall back to the
-      // plain claim strings (see ProductMatrix's claimRows fallback above).
-      sub: hasObjClaims ? 'market language' : 'original language',
-    },
-  ].filter(Boolean);
+  // Coverage tab (ref_claim match) — commented out per request.
+  // hasLegacy   && { key: 'legacy',   label: 'Coverage',        sub: 'ref_claim match' },
+  hasProductTab && {
+    key: 'product',
+    label: 'Product matrix',
+    sub: hasObjClaims ? 'market language' : 'original language',
+  },
+  hasPatentTab  && { key: 'patent',  label: 'Patent matrix',  sub: 'original language' },
+].filter(Boolean);
 
   // Pick whichever tab actually has data: prefer the user's manual selection
   // if it's still valid, otherwise fall back to the first (only) available
@@ -990,8 +1060,11 @@ useEffect(() => {
 const totalMatches = useMemo(() => {
   if (resolvedTab === 'patent') {
     const docClaims = getClaimRows(rawClaimsObj ?? displayClaims, 'documented');
-    const patentInf = rawInfringements.filter(
-      inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
+    const patentInf = mergeByKey(                              // ← was a plain filter
+      rawInfringements.filter(
+        inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
+      ),
+      'case_id'
     );
     const maps = patentInf.map(inf => {
       const set = new Set();
@@ -1006,8 +1079,11 @@ const totalMatches = useMemo(() => {
 
   if (resolvedTab === 'product') {
     const claimRows = getClaimRows(rawClaimsObj ?? displayClaims, 'market');
-    const productInf = rawInfringements.filter(
-      inf => inf.product_id && Array.isArray(inf.infringements)
+    const productInf = mergeByKey(                             // ← was a plain filter
+      rawInfringements.filter(
+        inf => inf.product_id && Array.isArray(inf.infringements)
+      ),
+      'product_id'
     );
     const maps = productInf.map(inf => {
       const set = new Set();
