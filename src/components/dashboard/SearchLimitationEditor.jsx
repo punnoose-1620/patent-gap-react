@@ -258,7 +258,7 @@ const Field = ({ label, children }) => (
 // ─── Main export ──────────────────────────────────────────────
 const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave }) => {
   const [companies, setCompanies] = useState(initialData?.companies || []);
-  const [keywords,     setKeywords]     = useState(initialData?.keywords     || []);
+ // const [keywords,     setKeywords]     = useState(initialData?.keywords     || []);
   const [urls,      setUrls]      = useState(initialData?.urls      || []);
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -267,7 +267,7 @@ const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave 
   // Sync if parent re-fetches data
   useEffect(() => {
     setCompanies(initialData?.companies || []);
-    setKeywords(initialData?.keywords         || []);
+   // setKeywords(initialData?.keywords         || []);
     setUrls(initialData?.urls           || []);
   }, [initialData]);
 
@@ -275,7 +275,7 @@ const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave 
   const removeAt = setter => i  => setter(prev => prev.filter((_, idx) => idx !== i));
 
   const handleSave = async () => {
-    if (!companies.length && !keywords.length && !urls.length) {
+    if (!companies.length && !urls.length) {
       setSaveError('Add at least one value before saving.');
       return;
     }
@@ -285,16 +285,16 @@ const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave 
       setSaveError(null);
       // ── Merge: keep existing case keywords that weren't part of the
       //    previous search-limitation set, then add the current limitation keywords ──
-      const prevLimitationKeywords = initialData?.keywords || [];
-      const keptExistingKeywords = allKeywords.filter(k => !prevLimitationKeywords.includes(k));
-      const mergedKeywords = [...new Set([...keptExistingKeywords, ...keywords])];
+      //const prevLimitationKeywords = initialData?.keywords || [];
+      //const keptExistingKeywords = allKeywords.filter(k => !prevLimitationKeywords.includes(k));
+      //const mergedKeywords = [...new Set([...keptExistingKeywords, ...keywords])];
 
-      console.log('💾 Saving search limitations payload', caseId, { companies, keywords, urls, mergedKeywords });
+      console.log('💾 Saving search limitations payload', caseId, { companies, urls });
       await patentApi.updateCase(caseId, {
-        searchLimitations: { companies, keywords, urls },
-        keywords: mergedKeywords,   
+        searchLimitations: { companies, urls },
+           
       });
-      onSave?.({ companies, keywords, urls });
+      onSave?.({ companies, urls });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
@@ -308,7 +308,7 @@ const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave 
   const handleCancel = () => {
     
     setCompanies(initialData?.companies || []);
-    setKeywords(initialData?.keywords         || []);
+   // setKeywords(initialData?.keywords         || []);
     setUrls(initialData?.urls           || []);
     setSaveError(null);
   };
@@ -324,6 +324,11 @@ const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave 
         />
       </Field>
 
+     {/* ── Keywords / Terms field commented out — keywords are now edited
+      directly via EditableKeywordsRow on the case info panel instead.
+      `keywords` state + the merge logic in handleSave are left in place
+      untouched so existing search-limitation keywords still round-trip
+      correctly; there's just no UI here to add/remove them anymore. ──
       <Field label="Keywords / Terms">
         <TagInput
           tags={keywords}
@@ -332,6 +337,7 @@ const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave 
           placeholder="Type a keyword and press Enter or comma…"
         />
       </Field>
+      */}
 
       <Field label="Reference URLs">
         <UrlTagInput
