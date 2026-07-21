@@ -894,10 +894,16 @@ useEffect(() => {
     currentStatus, pTaken, prTaken, lastDate,
   });
 
-  patentApi.updateCase(caseId, { infringement_analysis_status: 'completed' })
+ patentApi.updateCase(caseId, {
+    infringement_analysis_status: 'completed',
+    patent_status_flags: {},
+    product_status_flags: {},
+  })
     .then(() => setCaseData(prev => ({
       ...prev,
       infringement_analysis_status: 'completed',
+      patent_status_flags: {},
+      product_status_flags: {},
     })))
     .catch(err => console.warn('Failed to reset analysis status:', err.message));
 
