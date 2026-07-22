@@ -960,15 +960,21 @@ useEffect(() => {
     setAnalysisLoading(true);
     setAnalysisStatus('infringement');
 
-    // ── ADD  optimistically set status to in-flight ──
-    setCaseData(prev => ({
-      ...prev,
+    const optimisticUpdate = {
       infringement_analysis_status: 'processing',
       patent_status_flags: {},
       product_status_flags: {},
       patent_analysis_time_taken: null,
       product_analysis_time_taken: null,
-    }));
+      last_infringement_analysis_date: new Date().toISOString(),
+    };
+
+    setCaseData(prev => ({ ...prev, ...optimisticUpdate }));
+
+    // push it to the backend too, so polling doesn't overwrite with stale data
+    patentApi.updateCase(caseId, optimisticUpdate).catch(err =>
+      console.warn('Failed to persist optimistic analysis start:', err.message)
+    );
 
 
     try {
