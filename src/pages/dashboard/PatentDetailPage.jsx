@@ -522,7 +522,7 @@ const PatentDetailPage = () => {
   const patentTimeTaken    = caseData?.patent_analysis_time_taken  || null;
   const productTimeTaken   = caseData?.product_analysis_time_taken || null;
   const lastAnalysisDate   = caseData?.last_infringement_analysis_date || null;
-  console.log('📅 lastAnalysisDate:', lastAnalysisDate);
+  console.log(' lastAnalysisDate:', lastAnalysisDate);
 
   //const displayClaims = caseData?.claims || [];
   /*const rawClaims = caseData?.claims;
@@ -1828,41 +1828,40 @@ useEffect(() => {
   
  
   {/* ── Infringement Sources ── */}
-      {(() => {
-        // Derive sources from infringements if the top-level field is missing
-        const sources = caseData?.infringement_sources?.length
-          ? caseData.infringement_sources
-          : (caseData?.infringements || [])
-              .flatMap(inf => {
-                // nested-case format: infringements[].infringements[].source
-                if (Array.isArray(inf.infringements)) {
-                  return inf.infringements.map(i => i.source).filter(Boolean);
-                }
-                // product / patent format: top-level source field
-                return inf.source ? [inf.source] : [];
-              });
+      {/* ── Infringement Sources ── */}
+{(() => {
+  // Only look at infringements matching the CURRENTLY SELECTED tab
+  const relevantInfringements = (caseData?.infringements || []).filter(inf =>
+    matchTypeFilter === 'product'
+      ? Boolean(inf.product_id)
+      : Boolean(inf.case_id || inf.entry_id || inf.patent)
+  );
 
-        const uniqueSources = [...new Set(sources)].filter(Boolean);
-        if (!uniqueSources.length) return null;
+  const sources = relevantInfringements
+    .map(inf => inf.source)
+    .filter(Boolean);
 
-        return (
-          <div style={{
-            display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
-            marginBottom: 10, paddingLeft: 2,
-          }}>
-            <span style={{
-              fontFamily: "'Inconsolata', monospace", fontSize: 10,
-              textTransform: 'uppercase', letterSpacing: '0.10em',
-              color: 'var(--ink3)', flexShrink: 0, marginRight: 4,
-            }}>
-              Infringement sources
-            </span>
-            {uniqueSources.map((src, i) => (
-              <span key={i} className="pcard-num" style={{ margin: 0 }}>{src}</span>
-            ))}
-          </div>
-        );
-      })()}
+  const uniqueSources = [...new Set(sources)].filter(Boolean);
+  if (!uniqueSources.length) return null;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+      marginBottom: 10, paddingLeft: 2,
+    }}>
+      <span style={{
+        fontFamily: "'Inconsolata', monospace", fontSize: 10,
+        textTransform: 'uppercase', letterSpacing: '0.10em',
+        color: 'var(--ink3)', flexShrink: 0, marginRight: 4,
+      }}>
+        {matchTypeFilter === 'product' ? 'Product infringement sources' : 'Patent infringement sources'}
+      </span>
+      {uniqueSources.map((src, i) => (
+        <span key={i} className="pcard-num" style={{ margin: 0 }}>{src}</span>
+      ))}
+    </div>
+  );
+})()}
   {/* ── Filter tabs ── */}
   {matchesExpanded && (
     <div style={{
