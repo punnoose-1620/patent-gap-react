@@ -76,7 +76,7 @@ const normaliseInfringement = (m) => {
 
   const isProduct = Boolean(m.product_id);
 
- /* if (isProduct) {
+  if (isProduct) {
     return {
       type:          'product',
       title:         m.product_name || 'Untitled Product',
@@ -88,21 +88,7 @@ const normaliseInfringement = (m) => {
       similarClaims: m.similar_claims || [],
       productClaims: m.claims        || [],
     };
-  }*/
-
-    if (isProduct) {
-  return {
-    type:          'product',
-    title:         m.product_name || 'Untitled Product',
-    id:            m.product_id   || 'N/A',
-    url:           m.product_url  || null,
-    source:        m.source       || 'unknown',
-    score:         calculateOverlapScore(m.infringements),
-    riskLevel:     calculateOverallRisk(m.infringements),
-    similarClaims: m.infringements || [],
-    productClaims: m.claims || (m.infringements || []).map(r => r.ref_claim).filter(Boolean),
-  };
-}
+  }
 
   return {
     type:          'patent',
@@ -230,7 +216,7 @@ const InfringementModal = ({
       }));
     }
 
-   /* if (isProduct) {
+    if (isProduct) {
       return similarClaims.map((sc, index) => ({
         claimNumber:     index + 1,
         yourClaim:       productClaims[index] || '—',
@@ -239,18 +225,7 @@ const InfringementModal = ({
         urlToClaim:      sc.url_to_claim      || null,
         justification:   sc.justification     || null,
       }));
-    } */
-    if (isProduct) {
-  return similarClaims.map((sc, index) => ({
-    claimNumber:     index + 1,
-    yourClaim:       sc.ref_claim ?? productClaims[index] ?? '—',
-    similarClaim:    sc.matched_claim ?? sc.claim ?? null,  // whatever field name holds the *product's* claim text — confirm with a sample row
-    similarityScore: sc.calculated_similarity_score ?? sc.similarity_score ?? null,
-    urlToClaim:      sc.url_to_claim ?? null,
-    justification:   sc.justification ?? null,
-  }));
-}
-    else {
+    } else {
       // Patent: zip caseData.claims with similar_claims
       const patentClaims = caseData?.claims || [];
       if (!patentClaims.length) return [];
