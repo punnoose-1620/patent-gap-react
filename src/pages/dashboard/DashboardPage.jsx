@@ -640,7 +640,7 @@ export default function DashboardPage() {
             
             <StatCard
               title="Cleared Patents"
-              value={ui.loading ? '—' : (patents.stats.clearedPatents ?? closedPatents.length)}
+              value={ui.loading ? '—' : (closedPatents.length)}
              // value={ui.loading ? '—' : (patents.stats.clearedPatents || closedPatents.length)}
               //value={ui.loading ? '—' : (closedPatents.length)}
               subtitle="No infringement"
