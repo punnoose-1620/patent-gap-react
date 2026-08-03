@@ -643,7 +643,8 @@ export default function DashboardPage() {
               value={ui.loading ? '—' : (closedPatents.length)}
              // value={ui.loading ? '—' : (patents.stats.clearedPatents || closedPatents.length)}
               //value={ui.loading ? '—' : (closedPatents.length)}
-              subtitle="No infringement"
+              //subtitle="No infringement"
+              subtitle="Cleared / Expired / Abandoned"
               icon={<CheckCircle size={18} />}
               color="green"
               onClick={() => handleStatCardClick('clearedPatents')}
