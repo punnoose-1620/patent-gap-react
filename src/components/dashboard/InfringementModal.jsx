@@ -53,6 +53,37 @@ const calculateOverallRisk = (items) => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// Resolve the reference claim text for a similar_claims row using
+// ref_claim_index (which claim in the main claims collection) and
+// ref_claim_flag ('market' → market_language_claim, else documented_claim).
+// ─────────────────────────────────────────────────────────────
+const getReferenceClaimText = (claimsData, refClaimIndex, refClaimFlag) => {
+  if (!claimsData || refClaimIndex === undefined || refClaimIndex === null) return null;
+
+  const claimObj = Array.isArray(claimsData)
+    ? claimsData[refClaimIndex]
+    : (claimsData[refClaimIndex] ?? claimsData[String(refClaimIndex)]);
+
+  if (claimObj === undefined || claimObj === null) return null;
+
+  // Flat string claims (legacy format) — strip leading "1. " numbering
+  if (typeof claimObj === 'string') {
+    const parts = claimObj.split('. ');
+    return parts.length > 1 ? parts.slice(1).join('. ').trim() : claimObj;
+  }
+
+  // Object form: { documented_claim, market_language_claim, claim_type, ... }
+  if (typeof claimObj === 'object') {
+    if (refClaimFlag === 'market') {
+      return claimObj.market_language_claim ?? claimObj.documented_claim ?? null;
+    }
+    return claimObj.documented_claim ?? claimObj.market_language_claim ?? null;
+  }
+
+  return null;
+};
+
+// ─────────────────────────────────────────────────────────────
 // Normalise a raw infringement object into a uniform shape.
 // ─────────────────────────────────────────────────────────────
 const normaliseInfringement = (m) => {
@@ -216,7 +247,7 @@ const InfringementModal = ({
       }));
     }
 
-    if (isProduct) {
+   /* if (isProduct) {
       return similarClaims.map((sc, index) => ({
         claimNumber:     index + 1,
         yourClaim:       productClaims[index] || '—',
@@ -242,7 +273,44 @@ const InfringementModal = ({
           justification:   null,
         };
       });
+    }*/
+
+if (isProduct) {
+  return similarClaims.map((sc, index) => {
+    const refClaim = getReferenceClaimText(caseData?.claims, sc?.ref_claim_index, sc?.ref_claim_flag);
+    return {
+      claimNumber:     index + 1,
+      yourClaim:       refClaim ?? productClaims[index] ?? '—', // fallback for old rows without ref_claim_index
+      similarClaim:    sc.claim             || null,
+      similarityScore: sc.similarity_score  ?? null,
+      urlToClaim:      sc.url_to_claim      || null,
+      justification:   sc.justification     || null,
+    };
+  });
+} else {
+  // Patent: resolve each row's reference claim via ref_claim_index/ref_claim_flag
+  const patentClaims = caseData?.claims || [];
+  return similarClaims.map((sc, index) => {
+    const refClaim = getReferenceClaimText(patentClaims, sc?.ref_claim_index, sc?.ref_claim_flag);
+
+    // fallback to old positional zip if this row has no ref_claim_index (legacy data)
+    let fallback = '—';
+    if (!refClaim && Array.isArray(patentClaims) && patentClaims[index]) {
+      const parts = patentClaims[index].split('. ');
+      fallback = parts.length > 1 ? parts.slice(1).join('. ').trim() : patentClaims[index];
     }
+
+    return {
+      claimNumber:     index + 1,
+      yourClaim:       refClaim ?? fallback,
+      similarClaim:    sc?.claim            || null,
+      similarityScore: sc?.similarity_score ?? null,
+      urlToClaim:      sc?.url_to_claim     || null,
+      justification:   null,
+    };
+  });
+}
+      
   })();
 
   // ─── JSX ─────────────────────────────────────────────────────────────────
@@ -719,7 +787,7 @@ const InfringementModal = ({
                         <th style={{ width:68 }}>Claim #</th>
                         {/* Column header adapts to format */}
                         <th style={{ width:'30%' }}>
-                          {isNested ? 'Reference Claim' : isProduct ? 'Product Claim' : 'Your Patent Claim'}
+                          {isNested ? 'Reference Claim' : isProduct ? 'Market Language Claim' : 'Your Patent Claim'}
                         </th>
                         <th>
                           {isNested ? 'Matched Claim' : 'Similar Infringing Claim'}
