@@ -84,6 +84,34 @@ const getReferenceClaimText = (claimsData, refClaimIndex, refClaimFlag) => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// Normalise caseData.claims (array of strings OR object of
+// {documented_claim, market_language_claim}) into a flat display array.
+// ─────────────────────────────────────────────────────────────
+
+const getDisplayClaimsList = (claimsData) => {
+  if (!claimsData) return [];
+
+  const stripLeadingNumber = (text) => {
+    if (typeof text !== 'string') return text;
+    const parts = text.split('. ');
+    return parts.length > 1 && /^\d+$/.test(parts[0].trim())
+      ? parts.slice(1).join('. ').trim()
+      : text;
+  };
+
+  const values = Array.isArray(claimsData) ? claimsData : Object.values(claimsData);
+
+  return values
+    .map((v) => {
+      if (typeof v === 'object' && v !== null) {
+        return v.documented_claim ?? v.market_language_claim ?? null;
+      }
+      return typeof v === 'string' ? stripLeadingNumber(v) : null;
+    })
+    .filter(Boolean);
+};
+
+// ─────────────────────────────────────────────────────────────
 // Normalise a raw infringement object into a uniform shape.
 // ─────────────────────────────────────────────────────────────
 const normaliseInfringement = (m) => {
@@ -230,6 +258,10 @@ const InfringementModal = ({
 
   // Product claims
   const productClaims = normInfData?.productClaims || match.claims || [];
+
+  //Patent claims (for patent-type infringements)
+  const matchedPatentClaimsList = getDisplayClaimsList(normInfData?.claims || match.claims);
+
 
   // ── Build claim chart rows ──
   const claimRows = (() => {
@@ -736,6 +768,32 @@ if (isProduct) {
                   ))}
                 </div>
               )}
+
+              {/* Patent claims preview (patent type only, not nested) — 
+            shows the MATCHED infringing patent's own claim list */}
+        {!isProduct && matchedPatentClaimsList.length > 0 && (
+          <div style={{
+            background:'var(--surf)', borderRadius:12,
+            border:'1px solid var(--rule)', padding:'14px 18px', marginBottom:14,
+          }}>
+            <div style={{ fontFamily:"'Inconsolata',monospace", fontSize:9.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--ink3)', marginBottom:10 }}>
+              Patent Claims
+            </div>
+            {matchedPatentClaimsList.map((c, i) => (
+              <p key={i} style={{
+                fontSize:13, color:'var(--ink2)', lineHeight:1.65, margin:0,
+                paddingBottom: i < matchedPatentClaimsList.length - 1 ? 8 : 0,
+                borderBottom: i < matchedPatentClaimsList.length - 1 ? '1px solid var(--rule2)' : 'none',
+                marginBottom: i < matchedPatentClaimsList.length - 1 ? 8 : 0,
+              }}>
+                <span style={{ fontFamily:"'Libre Baskerville',serif", fontWeight:700, color:'var(--accent)', marginRight:6 }}>
+                  {i + 1}.
+                </span>
+                {c}
+              </p>
+            ))}
+          </div>
+        )}
 
               {/* Overlap score bar — only shown when score > 50 */}
               {scoreNum > 50 && (
