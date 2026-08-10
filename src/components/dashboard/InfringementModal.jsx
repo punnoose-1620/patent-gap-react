@@ -179,6 +179,10 @@ const InfringementModal = ({
   const [sameAsPatent, setSameAsPatent] = useState(false);
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState(null);
+  const PATENT_CLAIMS_PREVIEW_COUNT = 3; // how many claims show before "View all"
+
+  
+  const [patentClaimsExpanded, setPatentClaimsExpanded] = useState(false); // collapsed by default
 
   // Close on Escape
   useEffect(() => {
@@ -548,6 +552,27 @@ if (isProduct) {
           letter-spacing:-0.02em; line-height:1.25; margin:0 0 10px;
           word-break:break-word;
         }
+          ._im_claims_toggle {
+          all:unset; cursor:pointer;
+          display:inline-flex; align-items:center; gap:5px;
+          font-family:'Inconsolata',monospace; font-size:10.5px; font-weight:600;
+          text-transform:uppercase; letter-spacing:0.08em;
+          color:var(--accent); background:var(--acc-soft);
+          padding:4px 10px; border-radius:6px;
+          white-space:nowrap; flex-shrink:0;
+          transition:background 0.15s;
+        }
+        ._im_claims_toggle:hover { background:rgba(46,125,50,0.16); }
+
+        ._im_claims_showmore {
+          all:unset; cursor:pointer; display:block; width:100%;
+          text-align:center;
+          font-family:'Inconsolata',monospace; font-size:11px; font-weight:600;
+          color:var(--accent); background:var(--acc-soft);
+          padding:7px 0; border-radius:7px;
+          transition:background 0.15s;
+        }
+        ._im_claims_showmore:hover { background:rgba(46,125,50,0.16); }
 
         /* ════ TABLET ════ */
         @media (max-width:1023px) {
@@ -770,30 +795,76 @@ if (isProduct) {
               )}
 
               {/* Patent claims preview (patent type only, not nested) — 
-            shows the MATCHED infringing patent's own claim list */}
-        {!isProduct && matchedPatentClaimsList.length > 0 && (
-          <div style={{
-            background:'var(--surf)', borderRadius:12,
-            border:'1px solid var(--rule)', padding:'14px 18px', marginBottom:14,
-          }}>
-            <div style={{ fontFamily:"'Inconsolata',monospace", fontSize:9.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--ink3)', marginBottom:10 }}>
-              Patent Claims
-            </div>
-            {matchedPatentClaimsList.map((c, i) => (
-              <p key={i} style={{
-                fontSize:13, color:'var(--ink2)', lineHeight:1.65, margin:0,
-                paddingBottom: i < matchedPatentClaimsList.length - 1 ? 8 : 0,
-                borderBottom: i < matchedPatentClaimsList.length - 1 ? '1px solid var(--rule2)' : 'none',
-                marginBottom: i < matchedPatentClaimsList.length - 1 ? 8 : 0,
-              }}>
-                <span style={{ fontFamily:"'Libre Baskerville',serif", fontWeight:700, color:'var(--accent)', marginRight:6 }}>
-                  {i + 1}.
-                </span>
-                {c}
-              </p>
-            ))}
-          </div>
-        )}
+              shows the MATCHED infringing patent's own claim list. Collapsible: only
+              the first PATENT_CLAIMS_PREVIEW_COUNT claims render until the user
+              expands, since these lists can run very long and were pushing the rest
+              of the modal (score bar, claim chart) far below the fold. */}
+              {!isProduct && matchedPatentClaimsList.length > 0 && (
+                <div style={{
+                  background:'var(--surf)', borderRadius:12,
+                  border:'1px solid var(--rule)', padding:'14px 18px', marginBottom:14,
+                }}>
+                  <div style={{
+                    display:'flex', alignItems:'center', justifyContent:'space-between',
+                    marginBottom:10, gap:10,
+                  }}>
+                    <div style={{ fontFamily:"'Inconsolata',monospace", fontSize:9.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--ink3)' }}>
+                      Patent Claims
+                      <span style={{ color:'var(--ink3)', opacity:0.7, marginLeft:6 }}>
+                        ({matchedPatentClaimsList.length})
+                      </span>
+                    </div>
+
+                    {matchedPatentClaimsList.length > PATENT_CLAIMS_PREVIEW_COUNT && (
+                      <button
+                        className="_im_claims_toggle"
+                        onClick={() => setPatentClaimsExpanded(prev => !prev)}
+                      >
+                        {patentClaimsExpanded
+                          ? 'Collapse'
+                          : `View all ${matchedPatentClaimsList.length}`}
+                        <svg
+                          width="10" height="10" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2.5"
+                          strokeLinecap="round" strokeLinejoin="round"
+                          style={{
+                            transition:'transform 0.2s ease',
+                            transform: patentClaimsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                          }}
+                        >
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {(patentClaimsExpanded
+                    ? matchedPatentClaimsList
+                    : matchedPatentClaimsList.slice(0, PATENT_CLAIMS_PREVIEW_COUNT)
+                  ).map((c, i) => (
+                    <p key={i} style={{
+                      fontSize:13, color:'var(--ink2)', lineHeight:1.65, margin:0,
+                      paddingBottom: 8,
+                      borderBottom: '1px solid var(--rule2)',
+                      marginBottom: 8,
+                    }}>
+                      <span style={{ fontFamily:"'Libre Baskerville',serif", fontWeight:700, color:'var(--accent)', marginRight:6 }}>
+                        {i + 1}.
+                      </span>
+                      {c}
+                    </p>
+                  ))}
+
+                  {!patentClaimsExpanded && matchedPatentClaimsList.length > PATENT_CLAIMS_PREVIEW_COUNT && (
+                    <button
+                      className="_im_claims_showmore"
+                      onClick={() => setPatentClaimsExpanded(true)}
+                    >
+                      + {matchedPatentClaimsList.length - PATENT_CLAIMS_PREVIEW_COUNT} more claim{matchedPatentClaimsList.length - PATENT_CLAIMS_PREVIEW_COUNT !== 1 ? 's' : ''}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Overlap score bar — only shown when score > 50 */}
               {scoreNum > 50 && (
