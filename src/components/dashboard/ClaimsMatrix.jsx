@@ -205,18 +205,48 @@ const ScorePill = ({ pct, compact }) => {
 //    / `min-width: 0` so it can never force the parent page layout to
 //    overflow horizontally.
 
+// ─── Shared table shell (responsive: cards <640, auto-compact <1024) ───────
+
 const DENSITY = {
   comfortable: { claimCol: 260, matchCol: 100, fontSize: 12 },
-  compact:     { claimCol: 220, matchCol: 64,  fontSize: 11 },
+  compact:     { claimCol: 180, matchCol: 60,  fontSize: 11 },
 };
 
-// Always show this many match columns per page. Prev/Next move a full page.
 const PAGE_SIZE = 10;
 
+// Simple hook: tracks viewport width bucket so table + controls can react.
+const useViewportBucket = () => {
+  const [width, setWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1280
+  );
+  useEffect(() => {
+    let raf;
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setWidth(window.innerWidth));
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+  return width;
+};
+
 const MatrixTable = ({ claimRows, matches, getMatchSet, getScore, showScorePerCell = false }) => {
-  const [density, setDensity] = useState('comfortable');
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'cards'
-  const [page, setPage] = useState(0); // 0-indexed page number
+  const width = useViewportBucket();
+
+  const isCards   = width < 640;                 // phones: card list, no table
+  const isNarrow  = width >= 640 && width < 1024; // tablets/small laptops
+  const isTiny    = width < 420;                  // very small phones
+
+  const [densityOverride, setDensityOverride] = useState(null); // user manual choice
+  const autoDensity = isNarrow ? 'compact' : 'comfortable';
+  const density = densityOverride || autoDensity;
+
+  const [viewMode, setViewMode] = useState(isCards ? 'cards' : 'table');
+  const [page, setPage] = useState(0);
   const [jumpValue, setJumpValue] = useState('');
   const scrollRef = useRef(null);
 
@@ -224,16 +254,12 @@ const MatrixTable = ({ claimRows, matches, getMatchSet, getScore, showScorePerCe
   const compact = density === 'compact';
 
   useEffect(() => {
-    const check = () => setViewMode(window.innerWidth < 640 ? 'cards' : 'table');
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
+    setViewMode(isCards ? 'cards' : 'table');
+  }, [isCards]);
 
   const totalCols = matches.length;
   const totalPages = Math.max(1, Math.ceil(totalCols / PAGE_SIZE));
 
-  // Clamp page if the dataset shrinks (e.g. switching tabs/filters)
   useEffect(() => {
     setPage(p => Math.min(p, totalPages - 1));
   }, [totalPages]);
@@ -246,28 +272,6 @@ const MatrixTable = ({ claimRows, matches, getMatchSet, getScore, showScorePerCe
     [matches, firstVisible, lastVisible]
   );
 
-  console.log('MatrixTable debug:', {
-  claimRowsLen: claimRows.length,
-  matchesLen: matches.length,
-  visibleLen: visibleMatches.length,
-  page, totalPages,
-  sampleHas: visibleMatches[0] ? getMatchSet(visibleMatches[0]).has(claimRows[0]) : null,
-});
-
-// ── extra: dump the raw strings being compared for claim #1 × match #1 ──
-if (claimRows[0] && visibleMatches[0]) {
-  const set0 = getMatchSet(visibleMatches[0]);
-  console.log('claimRows[0] (raw):', JSON.stringify(claimRows[0]));
-  console.log('claimRows[0] (normalized):', JSON.stringify(normalizeClaim(claimRows[0])));
-  // dump every key in match #1's score map so we can see what IS in there
-  if (visibleMatches[0]._scoreMap) {
-    console.log('match[0]._scoreMap keys:', [...visibleMatches[0]._scoreMap.keys()]);
-  }
-}
-
-  // Reset any leftover horizontal scroll offset whenever the page or
-  // density changes, so the new page always starts fully visible from
-  // the claim column.
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollLeft = 0;
   }, [page, density]);
@@ -278,9 +282,7 @@ if (claimRows[0] && visibleMatches[0]) {
   const handleJumpSubmit = (e) => {
     e.preventDefault();
     const n = parseInt(jumpValue, 10);
-    if (!isNaN(n) && n >= 1 && n <= totalCols) {
-      goToColumn(n - 1);
-    }
+    if (!isNaN(n) && n >= 1 && n <= totalCols) goToColumn(n - 1);
     setJumpValue('');
   };
 
@@ -296,21 +298,18 @@ if (claimRows[0] && visibleMatches[0]) {
   const atEnd = page >= totalPages - 1;
   const showNav = totalPages > 1;
 
-  // Minimap thumb: width = fraction of one page, position = fraction through pages
   const thumbWidthPct = Math.max(6, (1 / totalPages) * 100);
   const maxThumbTravelPct = 100 - thumbWidthPct;
   const thumbLeftPct = totalPages > 1 ? (page / (totalPages - 1)) * maxThumbTravelPct : 0;
 
-  // ── Mobile / narrow viewport: per-claim card list instead of a wide table ──
-  // (Cards view still shows ALL matches per claim, not just the current page,
-  // since there's no horizontal column concept on mobile.)
+  // ── Mobile: per-claim card list ──
   if (viewMode === 'cards') {
     return (
       <div className="pd-card-body" style={{ padding: 0, overflow: 'hidden', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 14px', borderBottom: '1px solid var(--rule2)',
-          background: 'var(--surf2)',
+          background: 'var(--surf2)', flexWrap: 'wrap', gap: 6,
         }}>
           <span style={{
             fontFamily: "'Inconsolata', monospace", fontSize: 10, fontWeight: 600,
@@ -344,7 +343,7 @@ if (claimRows[0] && visibleMatches[0]) {
                 }}>
                   {rowIdx + 1}
                 </span>
-                <span style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.5 }}>{claim}</span>
+                <span style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.5, minWidth: 0, wordBreak: 'break-word' }}>{claim}</span>
               </div>
               {rowMatches.length > 0 ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: 26 }}>
@@ -354,6 +353,7 @@ if (claimRows[0] && visibleMatches[0]) {
                       fontFamily: "'Inconsolata', monospace", fontSize: 10,
                       background: 'rgba(46,125,50,0.10)', color: '#1b5e20',
                       borderRadius: 4, padding: '3px 7px', fontWeight: 600,
+                      maxWidth: '100%',
                     }}>
                       <CheckIcon size={14} />
                       {truncId(m._colId, 14)}
@@ -373,7 +373,7 @@ if (claimRows[0] && visibleMatches[0]) {
     );
   }
 
-  // ── Desktop / tablet: paginated table (10 columns per page) ──
+  // ── Tablet / desktop: paginated table ──
   return (
     <div className="pd-card-body" style={{ padding: 0, overflow: 'hidden', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
 
@@ -381,102 +381,90 @@ if (claimRows[0] && visibleMatches[0]) {
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexWrap: 'wrap', gap: 8,
-        padding: '8px 12px', borderBottom: '1px solid var(--rule2)',
+        padding: isTiny ? '8px' : '8px 12px', borderBottom: '1px solid var(--rule2)',
         background: 'var(--surf2)',
       }}>
         <span style={{
           fontFamily: "'Inconsolata', monospace", fontSize: 10, fontWeight: 600,
           textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)',
+          whiteSpace: 'nowrap',
         }}>
           {totalCols > 0
-            ? `Showing ${firstVisible + 1}–${lastVisible + 1} of ${totalCols} columns`
+            ? isTiny
+              ? `${firstVisible + 1}–${lastVisible + 1}/${totalCols}`
+              : `Showing ${firstVisible + 1}–${lastVisible + 1} of ${totalCols} columns`
             : 'No columns'}
         </span>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', rowGap: 6 }}>
           {showNav && (
             <>
-              <button
-                onClick={() => goToPage(0)}
-                disabled={atStart}
-                aria-label="Jump to first page"
-                style={navBtnStyle(atStart)}
-              >
-                «
-              </button>
-              <button
-                onClick={() => goToPage(page - 1)}
-                disabled={atStart}
-                aria-label="Previous 10 columns"
-                style={navBtnStyle(atStart)}
-              >
+              {!isTiny && (
+                <button onClick={() => goToPage(0)} disabled={atStart} aria-label="Jump to first page" style={navBtnStyle(atStart)}>«</button>
+              )}
+              <button onClick={() => goToPage(page - 1)} disabled={atStart} aria-label="Previous 10 columns" style={navBtnStyle(atStart)}>
                 <ChevronLeft size={13} />
-                <span style={{ fontSize: 10, fontFamily: "'Inconsolata', monospace", fontWeight: 600 }}>Prev</span>
+                {!isTiny && <span style={{ fontSize: 10, fontFamily: "'Inconsolata', monospace", fontWeight: 600 }}>Prev</span>}
               </button>
 
               <span style={{
                 fontSize: 10, fontFamily: "'Inconsolata', monospace", fontWeight: 600,
                 color: 'var(--ink3)', padding: '0 4px', whiteSpace: 'nowrap',
               }}>
-                Page {page + 1} / {totalPages}
+                {page + 1}/{totalPages}
               </span>
 
-              <button
-                onClick={() => goToPage(page + 1)}
-                disabled={atEnd}
-                aria-label="Next 10 columns"
-                style={navBtnStyle(atEnd)}
-              >
-                <span style={{ fontSize: 10, fontFamily: "'Inconsolata', monospace", fontWeight: 600 }}>Next</span>
+              <button onClick={() => goToPage(page + 1)} disabled={atEnd} aria-label="Next 10 columns" style={navBtnStyle(atEnd)}>
+                {!isTiny && <span style={{ fontSize: 10, fontFamily: "'Inconsolata', monospace", fontWeight: 600 }}>Next</span>}
                 <ChevronRight size={13} />
               </button>
-              <button
-                onClick={() => goToPage(totalPages - 1)}
-                disabled={atEnd}
-                aria-label="Jump to last page"
-                style={navBtnStyle(atEnd)}
-              >
-                »
-              </button>
+              {!isTiny && (
+                <button onClick={() => goToPage(totalPages - 1)} disabled={atEnd} aria-label="Jump to last page" style={navBtnStyle(atEnd)}>»</button>
+              )}
 
-              <div style={{ width: 1, height: 18, background: 'var(--rule2)', margin: '0 4px' }} />
-
-              <form onSubmit={handleJumpSubmit} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 10, color: 'var(--ink3)', fontFamily: "'Inconsolata', monospace" }}>Go to</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalCols}
-                  value={jumpValue}
-                  onChange={(e) => setJumpValue(e.target.value)}
-                  placeholder={String(firstVisible + 1)}
-                  style={{
-                    width: 48, padding: '3px 6px', borderRadius: 4,
-                    border: '1px solid var(--rule2)', background: 'var(--surf)',
-                    color: 'var(--ink2)', fontSize: 11, fontFamily: "'Inconsolata', monospace",
-                  }}
-                />
-                <button type="submit" style={navBtnStyle(false)}>Go</button>
-              </form>
+              {!isNarrow && !isTiny && (
+                <>
+                  <div style={{ width: 1, height: 18, background: 'var(--rule2)', margin: '0 4px' }} />
+                  <form onSubmit={handleJumpSubmit} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 10, color: 'var(--ink3)', fontFamily: "'Inconsolata', monospace" }}>Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalCols}
+                      value={jumpValue}
+                      onChange={(e) => setJumpValue(e.target.value)}
+                      placeholder={String(firstVisible + 1)}
+                      style={{
+                        width: 48, padding: '3px 6px', borderRadius: 4,
+                        border: '1px solid var(--rule2)', background: 'var(--surf)',
+                        color: 'var(--ink2)', fontSize: 11, fontFamily: "'Inconsolata', monospace",
+                      }}
+                    />
+                    <button type="submit" style={navBtnStyle(false)}>Go</button>
+                  </form>
+                </>
+              )}
 
               <div style={{ width: 1, height: 18, background: 'var(--rule2)', margin: '0 4px' }} />
             </>
           )}
 
           <button
-            onClick={() => setDensity(d => d === 'comfortable' ? 'compact' : 'comfortable')}
+            onClick={() => setDensityOverride(d => (d === 'compact' ? 'comfortable' : 'compact'))}
             title={compact ? 'Switch to comfortable view' : 'Switch to compact view'}
             style={navBtnStyle(false)}
           >
             {compact ? <ZoomIn size={13} /> : <ZoomOut size={13} />}
-            <span style={{ fontSize: 10, fontFamily: "'Inconsolata', monospace", fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {compact ? 'Comfort' : 'Compact'}
-            </span>
+            {!isTiny && (
+              <span style={{ fontSize: 10, fontFamily: "'Inconsolata', monospace", fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {compact ? 'Comfort' : 'Compact'}
+              </span>
+            )}
           </button>
         </div>
       </div>
 
-      {/* ── Table (only the current page's columns are rendered) ── */}
+      {/* ── Table ── */}
       <div
         ref={scrollRef}
         style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%', maxWidth: '100%' }}
@@ -519,7 +507,7 @@ if (claimRows[0] && visibleMatches[0]) {
                         display: 'block', overflow: 'hidden', textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap', maxWidth: cfg.matchCol - 14,
                       }}>
-                        {truncId(m._colId, compact ? 8 : 11)}
+                        {truncId(m._colId, compact ? 6 : 11)}
                       </span>
                       {m._colSub && !compact && (
                         <span style={{
@@ -539,7 +527,6 @@ if (claimRows[0] && visibleMatches[0]) {
           <tbody>
             {claimRows.map((claim, rowIdx) => {
               const isEven = rowIdx % 2 === 0;
-              // Match-count badge still reflects ALL matches (not just this page)
               const rowMatchCount = matches.filter(m => getMatchSet(m).has(claim)).length;
               return (
                 <tr key={rowIdx} style={{ background: isEven ? 'var(--surf)' : 'var(--surf2)' }}>
@@ -559,7 +546,7 @@ if (claimRows[0] && visibleMatches[0]) {
                       }}>
                         {rowIdx + 1}
                       </span>
-                      <span title={claim}>{trunc(claim, compact ? 50 : 70)}</span>
+                      <span title={claim}>{trunc(claim, compact ? 40 : 70)}</span>
                       {rowMatchCount > 0 && (
                         <span style={{
                           marginLeft: 'auto', flexShrink: 0, fontSize: 9, fontWeight: 700,
@@ -606,12 +593,8 @@ if (claimRows[0] && visibleMatches[0]) {
         </table>
       </div>
 
-      {/* ── Bottom minimap showing position across all pages ── */}
       {showNav && (
-        <div style={{
-          padding: '8px 14px', borderTop: '1px solid var(--rule2)',
-          background: 'var(--surf2)',
-        }}>
+        <div style={{ padding: '8px 14px', borderTop: '1px solid var(--rule2)', background: 'var(--surf2)' }}>
           <div
             style={{
               position: 'relative', height: 6, borderRadius: 3,
@@ -634,12 +617,6 @@ if (claimRows[0] && visibleMatches[0]) {
           </div>
         </div>
       )}
-
-      <style>{`
-        @media (max-width: 900px) {
-          .cm-scroll-hint { display: block !important; }
-        }
-      `}</style>
     </div>
   );
 };
