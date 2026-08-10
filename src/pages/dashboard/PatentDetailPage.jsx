@@ -592,7 +592,7 @@ console.log('🔢 product_id:', realMatches.filter(i => i.product_id).length);
 console.log('🔢 standard patent (entry_id, no nested infringements[]):',
   realMatches.filter(i => !i.product_id && !(i.case_id && Array.isArray(i.infringements)) && (i.entry_id || i.patent || i.case_id)).length);
 
-  const potentialMatches = realMatches.length > 0
+ /* const potentialMatches = realMatches.length > 0
     ? realMatches.map(m => {
         const normalised = normaliseMatch(m);
         console.log(`🔍 [${normalised.type.toUpperCase()}] Normalised match789:`, normalised);
@@ -601,6 +601,37 @@ console.log('🔢 standard patent (entry_id, no nested infringements[]):',
     : [];
 
     console.log('🃏 All potential matches:', JSON.stringify(potentialMatches, null, 2));
+
+    const filteredMatches = potentialMatches.filter(m => m.type === matchTypeFilter);*/
+
+    const rawPotentialMatches = realMatches.length > 0
+    ? realMatches.map(m => {
+        const normalised = normaliseMatch(m);
+        console.log(`🔍 [${normalised.type.toUpperCase()}] Normalised match789:`, normalised);
+        return normalised;
+      })
+    : [];
+
+    // ── Dedupe by id (case_id / product_id / entry_id) — keep first occurrence only.
+    // Prevents the same patent/product rendering twice as separate MatchCards
+    // when the same id appears more than once in realMatches (e.g. duplicate
+    // infringement records from a re-run analysis that got appended instead
+    // of replaced upstream). Items with no usable id (undefined/null/'N/A')
+    // are never deduped against each other — better to over-show than to
+    // silently drop a real match because of a missing id.
+    const seenMatchIds = new Set();
+    const potentialMatches = rawPotentialMatches.filter(m => {
+      const key = m?.id ?? m?._entryId;
+      if (key === undefined || key === null || key === 'N/A') return true;
+      if (seenMatchIds.has(key)) {
+        console.log('🚫 Dropping duplicate match id:', key, m?.title);
+        return false;
+      }
+      seenMatchIds.add(key);
+      return true;
+    });
+
+    console.log('🃏 All potential matches (deduped):', JSON.stringify(potentialMatches, null, 2));
 
     const filteredMatches = potentialMatches.filter(m => m.type === matchTypeFilter);
 
@@ -2335,6 +2366,13 @@ useEffect(() => {
             gap: 20px !important;
           }
         }
+          /* Add a tablet step for the match cards grid — currently jumps straight from 3 cols to 1 */
+        @media (max-width: 1024px) and (min-width: 641px) {
+          .cards-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+
+        /* Prevent the whole content column from ever forcing page-level horizontal scroll */
+        .dash-content { min-width: 0; overflow-x: hidden; }
       `}</style>
 
       {/* ── Infringement match modal (unchanged) ── */}
