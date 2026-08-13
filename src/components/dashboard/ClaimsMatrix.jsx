@@ -333,6 +333,8 @@ const MatrixTable = ({ claimRows, matches, getMatchSet, getScore, showScorePerCe
               padding: '12px 14px',
               borderBottom: rowIdx < claimRows.length - 1 ? '1px solid var(--rule2)' : 'none',
               background: rowIdx % 2 === 0 ? 'var(--surf)' : 'var(--surf2)',
+              width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box',
+              overflow: 'hidden',
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: rowMatches.length ? 8 : 0 }}>
                 <span style={{
@@ -343,20 +345,24 @@ const MatrixTable = ({ claimRows, matches, getMatchSet, getScore, showScorePerCe
                 }}>
                   {rowIdx + 1}
                 </span>
-                <span style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.5, minWidth: 0, wordBreak: 'break-word' }}>{claim}</span>
+                <span style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.5, minWidth: 0, flex: 1, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{claim}</span>
               </div>
               {rowMatches.length > 0 ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: 26 }}>
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', gap: 6,
+                  paddingLeft: 26, minWidth: 0, maxWidth: '100%', boxSizing: 'border-box',
+                }}>
                   {rowMatches.map(({ m, score }, i) => (
                     <span key={i} style={{
                       display: 'inline-flex', alignItems: 'center', gap: 5,
                       fontFamily: "'Inconsolata', monospace", fontSize: 10,
                       background: 'rgba(46,125,50,0.10)', color: '#1b5e20',
                       borderRadius: 4, padding: '3px 7px', fontWeight: 600,
-                      maxWidth: '100%',
+                      maxWidth: '100%', minWidth: 0, boxSizing: 'border-box',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
                       <CheckIcon size={14} />
-                      {truncId(m._colId, 14)}
+                      {truncId(m._colId, 12)}
                       {score !== null && score !== undefined && ` · ${Math.round(score * 100)}%`}
                     </span>
                   ))}
@@ -467,7 +473,7 @@ const MatrixTable = ({ claimRows, matches, getMatchSet, getScore, showScorePerCe
       {/* ── Table ── */}
       <div
         ref={scrollRef}
-        style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%', maxWidth: '100%' }}
+        style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%', maxWidth: '100%', minWidth: 0 }}
       >
         <table style={{
           width: '100%', borderCollapse: 'collapse', fontSize: cfg.fontSize,
@@ -1079,12 +1085,12 @@ const totalMatches = useMemo(() => {
   return (
     <div style={{ marginBottom: 20, width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box', overflowX: 'hidden' }}>
       {/* ── Section header ── */}
-      <div className="sec-hd" style={{ marginBottom: 12 }}>
-        <div className="sec-hd-left">
+      <div className="sec-hd" style={{ marginBottom: 12, minWidth: 0, maxWidth: '100%', flexWrap: 'wrap' }}>
+        <div className="sec-hd-left" style={{ minWidth: 0 }}>
           <div className="sec-ico">
             <FileText size={16} color="var(--accent)" strokeWidth={1.5} />
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div className="sec-eye"><div className="live-dot" />Coverage</div>
             <div className="sec-title">Claims Coverage Matrix</div>
           </div>
@@ -1111,26 +1117,27 @@ const totalMatches = useMemo(() => {
           tabs.length <= 1, which left a product-only or patent-only matrix
           rendering with no indication of what it was. */}
       {tabs.length > 0 && (
-        <div style={{
-          display: 'flex', gap: 0, marginBottom: 14, flexWrap: 'wrap',
-          borderBottom: '1px solid var(--rule2)',
-        }}>
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                padding: '7px 14px',
-                background: 'none', border: 'none',
-                cursor: tabs.length > 1 ? 'pointer' : 'default',
-                fontFamily: "'Inconsolata', monospace",
-                color: resolvedTab === tab.key ? 'var(--accent)' : 'var(--ink3)',
-                borderBottom: resolvedTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
-                marginBottom: -1,
-                transition: 'color 0.15s, border-color 0.15s',
-              }}
-            >
+  <div style={{
+    display: 'flex', gap: 0, marginBottom: 14, flexWrap: 'wrap',
+    borderBottom: '1px solid var(--rule2)', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box',
+  }}>
+    {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+              padding: '7px 14px',
+              background: 'none', border: 'none',
+              cursor: tabs.length > 1 ? 'pointer' : 'default',
+              fontFamily: "'Inconsolata', monospace",
+              color: resolvedTab === tab.key ? 'var(--accent)' : 'var(--ink3)',
+              borderBottom: resolvedTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
+              marginBottom: -1,
+              transition: 'color 0.15s, border-color 0.15s',
+              flexShrink: 0,
+            }}
+          >
               <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 {tab.label}
               </span>
@@ -1168,6 +1175,11 @@ const totalMatches = useMemo(() => {
 
       <style>{`
         @media (max-width: 900px) { .cm-scroll-hint { display: block !important; } }
+
+        /* ── Defensive mobile overflow guards ── */
+        .sec-hd { min-width: 0; max-width: 100%; box-sizing: border-box; }
+        .sec-hd-left { min-width: 0; }
+        .sec-hd-left > div:last-child { min-width: 0; overflow-wrap: anywhere; }
       `}</style>
     </div>
   );

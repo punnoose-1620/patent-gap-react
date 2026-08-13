@@ -460,7 +460,8 @@ footer { background: var(--deep); border-top: 1px solid rgba(255,255,255,0.06); 
 .overlay.show { display: block; }
 
 /* ─── 13. DASHBOARD MAIN & TOPNAV ─── */
-.dash-main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+/*.dash-main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }*/
+.dash-main { margin-left: var(--sidebar-w); flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 100vh; }
 .topnav {
   height: var(--topnav-h); background: rgba(250,250,247,0.96); backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--rule); display: flex; align-items: center; gap: 12px;
