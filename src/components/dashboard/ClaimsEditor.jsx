@@ -317,29 +317,33 @@ const ClaimsEditorV2 = ({ caseId, initialClaims, onSave }) => {
   };
 
   return (
-    <div>
-      {/* ── Tab bar ── */}
+  <div>
+    {/* ── Tab bar ── */}
+    <div style={{ position: 'relative', marginBottom: 20 }}>
       <div style={{
-        display: 'flex', gap: 0, marginBottom: 20,
+        display: 'flex', gap: 0,
         borderBottom: '1px solid var(--rule2)',
+        overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+        maxWidth: '100%', minWidth: 0, boxSizing: 'border-box',
       }}>
         {claimTypes.map(type => (
-          <button
-            key={type}
-            onClick={() => { setActiveType(type); setIsEditing(false); }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '8px 16px',
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontFamily: "'Inconsolata', monospace", fontSize: 11, fontWeight: 600,
-              textTransform: 'uppercase', letterSpacing: '0.08em',
-              color: currentType === type ? 'var(--accent)' : 'var(--ink3)',
-              borderBottom: currentType === type ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: -1,
-              transition: 'color 0.15s, border-color 0.15s',
-              whiteSpace: 'nowrap',
-            }}
-          >
+        <button
+          key={type}
+          onClick={() => { setActiveType(type); setIsEditing(false); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '8px 16px',
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontFamily: "'Inconsolata', monospace", fontSize: 11, fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+            color: currentType === type ? 'var(--accent)' : 'var(--ink3)',
+            borderBottom: currentType === type ? '2px solid var(--accent)' : '2px solid transparent',
+            marginBottom: -1,
+            transition: 'color 0.15s, border-color 0.15s',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
             {/* colored dot per tab */}
             <span style={{
               width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
@@ -358,8 +362,17 @@ const ClaimsEditorV2 = ({ caseId, initialClaims, onSave }) => {
               {allEntries.filter(e => (e.claim_type || 'Other').trim() === type).length}
             </span>
           </button>
-        ))}
+       ))}
       </div>
+
+      {claimTypes.length > 2 && (
+        <div style={{
+          position: 'absolute', top: 0, right: 0, bottom: 1,
+          width: 28, pointerEvents: 'none',
+          background: 'linear-gradient(to right, transparent, var(--bg, #fff) 85%)',
+        }} />
+      )}
+    </div>
 
       {saveError && (
         <p style={{
