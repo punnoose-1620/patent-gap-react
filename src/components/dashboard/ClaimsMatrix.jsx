@@ -28,6 +28,32 @@ const avgProductScore = (simRows = []) => {
 };
 
 /**
+ * True for any infringement record that represents a PATENT match,
+ * regardless of which claim-scoring shape it carries:
+ *  - legacy: infringements[] rows with { ref_claim, calculated_similarity_score }
+ *  - current: similar_claims[] rows with { ref_claim_index, ref_claim_flag, similarity_score }
+ */
+const isPatentRecord = (inf) =>
+  Boolean(inf.case_id) && (
+    (Array.isArray(inf.infringements) && inf.infringements.length > 0) ||
+    (Array.isArray(inf.similar_claims) && inf.similar_claims.length > 0)
+  );
+
+/**
+ * Resolves the reference claim TEXT for a single row, regardless of shape.
+ * Legacy rows already carry the raw ref_claim string. Current-format rows
+ * only carry ref_claim_index, so we look it up in docClaims (the same flat,
+ * order-preserving array getClaimRows() already produces).
+ */
+const resolveRefClaimText = (docClaims, row) => {
+  if (row.ref_claim) return row.ref_claim;
+  if (row.ref_claim_index !== undefined && row.ref_claim_index !== null) {
+    return docClaims[row.ref_claim_index] ?? null;
+  }
+  return null;
+};
+
+/**
  * Normalizes claim text for comparison purposes only (never for display).
  * ref_claim strings and claim rows are supposed to be the same text, but
  * often pick up small drift — extra/irregular whitespace, smart quotes vs
@@ -91,9 +117,15 @@ const mergeByKey = (list, keyField) => {
     const key = inf[keyField];
     if (!key) return;
     if (!map.has(key)) {
-      map.set(key, { ...inf, infringements: [...(inf.infringements || [])] });
+      //map.set(key, { ...inf, infringements: [...(inf.infringements || [])] });
+      map.set(key, {
+        ...inf,
+        infringements: [...(inf.infringements || [])],
+        similar_claims: [...(inf.similar_claims || [])],   // ← added
+      });
     } else {
       map.get(key).infringements.push(...(inf.infringements || []));
+      map.get(key).similar_claims.push(...(inf.similar_claims || []));  // ← added
     }
   });
   return [...map.values()];
@@ -693,10 +725,14 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
   /*const patentMatches = infringements.filter(
     inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
   );*/
-  const patentMatches = mergeByKey(                       // ← wrap here
+  /*const patentMatches = mergeByKey(                       // ← wrap here
     infringements.filter(
       inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
     ),
+    'case_id'
+  );*/
+  const patentMatches = mergeByKey(
+    infringements.filter(isPatentRecord),   // ← was the inline case_id/infringements check
     'case_id'
   );
 
@@ -720,6 +756,15 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
         const existing = map.get(key) ?? 0;
         map.set(key, Math.max(existing, row.calculated_similarity_score ?? 0));
       }
+    });
+    // ← added: current-format rows
+    (inf.similar_claims || []).forEach(row => {
+      const refText = resolveRefClaimText(docClaims, row);
+      if (!refText) return;
+      const key = normalizeClaim(refText);
+      const score = row.similarity_score ?? row.calculated_similarity_score ?? 0;
+      const existing = map.get(key) ?? 0;
+      map.set(key, Math.max(existing, score));
     });
     return map;
   };
@@ -749,7 +794,7 @@ const enriched = patentMatches.map((inf, idx) => ({
     get: (claim) => m._scoreMap.get(normalizeClaim(claim)),
   });
 
-  const getScore = (m) => avgPatentScore(m.infringements || []);
+  const getScore = (m) => avgPatentScore([...(m.infringements || []), ...(m.similar_claims || [])]);
 
   const totalMatches = docClaims.reduce((count, claim) =>
     count + enriched.filter(m => m._scoreMap.has(normalizeClaim(claim))).length, 0);
@@ -968,9 +1013,10 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
 
-    const patentInf = rawInfringements.filter(
+   /* const patentInf = rawInfringements.filter(
       inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
-    );
+    );*/
+    const patentInf = rawInfringements.filter(isPatentRecord);
    /* const productInf = rawInfringements.filter(
       inf => inf.product_id && Array.isArray(inf.similar_claims)
     );*/
@@ -993,9 +1039,11 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
   // Determine which tabs have data
   const hasLegacy = potentialMatches?.length > 0 && displayClaims?.length > 0;
 
-  const hasPatentTab = rawInfringements.some(
+  /*const hasPatentTab = rawInfringements.some(
     inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
-  );
+  );*/
+
+  const hasPatentTab = rawInfringements.some(isPatentRecord);
 
   //const hasProductTab = rawInfringements.some(inf => inf.product_id && Array.isArray(inf.similar_claims));
   const hasProductTab = rawInfringements.some(inf => inf.product_id && Array.isArray(inf.infringements));
@@ -1044,9 +1092,7 @@ const totalMatches = useMemo(() => {
   if (resolvedTab === 'patent') {
     const docClaims = getClaimRows(rawClaimsObj ?? displayClaims, 'documented');
     const patentInf = mergeByKey(                              // ← was a plain filter
-      rawInfringements.filter(
-        inf => inf.case_id && Array.isArray(inf.infringements) && inf.infringements.length > 0
-      ),
+      rawInfringements.filter(isPatentRecord),
       'case_id'
     );
     const maps = patentInf.map(inf => {
@@ -1054,6 +1100,11 @@ const totalMatches = useMemo(() => {
       (inf.infringements || []).forEach(row => {
         if (row.ref_claim) set.add(normalizeClaim(row.ref_claim));
       });
+      // ← added: current-format rows
+    (inf.similar_claims || []).forEach(row => {
+      const refText = resolveRefClaimText(docClaims, row);
+      if (refText) set.add(normalizeClaim(refText));
+    });
       return set;
     });
     return docClaims.reduce((count, c) =>
