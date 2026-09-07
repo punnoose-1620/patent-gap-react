@@ -5,7 +5,7 @@ import { patentApi } from '../../api/patentApi';
 import { useDispatch } from 'react-redux';
 import { updatePatent } from '../../store/slices/patentSlice';
 
-const EditableTitleRow = ({ caseId, initialValue, onSave }) => {
+const EditableTitleRow = ({ caseId, initialValue, onSave, field = 'title' }) => {
   const dispatch = useDispatch();
   const [editing, setEditing] = useState(false);
   const [draft,   setDraft]   = useState('');
@@ -18,11 +18,11 @@ const EditableTitleRow = ({ caseId, initialValue, onSave }) => {
     }
     try {
       setSaving(true);
-      await patentApi.updateCase(caseId, { title: draft.trim() });
-      dispatch(updatePatent({ _id: caseId, title: draft.trim() }));
+      await patentApi.updateCase(caseId, { [field]: draft.trim() });
+      dispatch(updatePatent({ _id: caseId, [field]: draft.trim() }));
       onSave?.(draft.trim());
     } catch (err) {
-      alert(`Failed to save title: ${err?.message || 'Unknown error'}`);
+      alert(`Failed to save ${field}: ${err?.message || 'Unknown error'}`);
     } finally {
       setSaving(false);
       setEditing(false);
