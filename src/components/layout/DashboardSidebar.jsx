@@ -58,7 +58,7 @@ const NAV_ITEMS = [
             <line x1="6" y1="20" x2="6" y2="14"/>
           </svg>
         ),
-        label: 'Reports', id: 'reports', badge: null, href: '/reports',
+        label: 'Reports', id: 'reports', badge: null, wip: true,
       },
       {
         icon: (
