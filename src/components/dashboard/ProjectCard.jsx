@@ -1,10 +1,13 @@
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MoreVertical, FolderInput, Folder } from 'lucide-react';
 import {
   isAnalysisFailed,
   isAnalysisInFlight,
   isAnalysisCompleted,
   getAnalysisProgressMessage,
 } from '../../utils/infringementAnalysisStatus';
+import { UNSORTED_ID } from '../../hooks/useFolders';
 
 const AnalysisStatusIcon = ({ status }) => {
   const progress = getAnalysisProgressMessage(status);
@@ -37,7 +40,7 @@ const AnalysisStatusIcon = ({ status }) => {
   }
 
   // Error icon
-if (isAnalysisFailed(status)) {
+  if (isAnalysisFailed(status)) {
     return (
       <span
         title="Infringement analysis failed"
@@ -72,9 +75,11 @@ if (isAnalysisFailed(status)) {
 
   return null;
 };
+
 const ProjectCard = ({
   id,
   title,
+  alias,
   patentNumber,
   status,
   updatedAt,
@@ -88,14 +93,32 @@ const ProjectCard = ({
   infringementAnalysisStatus = 'unknown',
   riskLevel = 'low',
   hasUpdates,
+  folders = [],
+  currentFolderIds = [],
+  onMoveToFolder,
 }) => {
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  const displayTitle = alias?.trim() ? alias : title;
+
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
   console.log('Risk level:', riskLevel);
 
   const handleCardClick = () => {
     navigate('/patent-detail', {
       state: {
-        id, title, patentNumber, status, updatedAt,
+        id, title, alias, patentNumber, status, updatedAt,
         inventors, filedDate, keywords, description,
         matchesCount, documentsCount, progress
       }
@@ -115,131 +138,200 @@ const ProjectCard = ({
   const filledDots = Math.round((pct / 100) * 5);
 
   return (
-    <div onClick={handleCardClick} className={`pcard ${badgeClass}`} style={{ cursor: 'pointer' }}>
+    <>
+      <div onClick={handleCardClick} className={`pcard ${badgeClass}`} style={{ cursor: 'pointer' }}>
 
-            <div className="pcard-top" style={{ flexWrap: 'wrap', gap: 4 }}>
-        {/* ── Left: status + risk badges ── */}
-        <span className={`pcard-badge ${badgeClass}`}>
-          <span className="pcard-dot" />
-          {badgeLabel}
-        </span>
-       
-        {riskLevel === 'high' && (
-          <span className="pcard-badge expired">
+        <div className="pcard-top" style={{ flexWrap: 'wrap', gap: 4 }}>
+          {/* ── Left: status + risk badges ── */}
+          <span className={`pcard-badge ${badgeClass}`}>
             <span className="pcard-dot" />
-            High Risk
+            {badgeLabel}
           </span>
-        )}
-        {riskLevel === 'medium' && (
-          <span className="pcard-badge abandoned">
-            <span className="pcard-dot" />
-            Med Risk
-          </span>
-        )}
 
-        {/* ── Right: NEW + analysis icon + ext button — always pinned to the right ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-          <AnalysisStatusIcon status={infringementAnalysisStatus} />
-
-          {hasUpdates && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 3,
-                background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                color: '#fff',
-                fontSize: 8,
-                fontFamily: "'Inconsolata', monospace",
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                letterSpacing: '0.14em',
-                padding: '3px 7px 3px 5px',
-                borderRadius: 4,
-                flexShrink: 0,
-                boxShadow: '0 1px 4px rgba(22,163,74,0.35)',
-              }}
-            >
-              <span style={{
-                width: 5,
-                height: 5,
-                borderRadius: '50%',
-                background: '#fff',
-                opacity: 0.9,
-                animation: 'ia-pulse 1.2s ease-in-out infinite',
-                flexShrink: 0,
-              }} />
-              Updates
+          {riskLevel === 'high' && (
+            <span className="pcard-badge expired">
+              <span className="pcard-dot" />
+              High Risk
+            </span>
+          )}
+          {riskLevel === 'medium' && (
+            <span className="pcard-badge abandoned">
+              <span className="pcard-dot" />
+              Med Risk
             </span>
           )}
 
-          <button
-            className="card-ext"
-            aria-label="Open"
-            onClick={e => { e.stopPropagation(); handleCardClick(); }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-              <polyline points="15 3 21 3 21 9"/>
-              <line x1="10" y1="14" x2="21" y2="3"/>
-            </svg>
-          </button>
-        </div>
-      </div>
+          {/* ── Right: NEW + analysis icon + ext button — always pinned to the right ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+            <AnalysisStatusIcon status={infringementAnalysisStatus} />
 
-      <div className="pcard-title">{title}</div>
+            {hasUpdates && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                  color: '#fff',
+                  fontSize: 8,
+                  fontFamily: "'Inconsolata', monospace",
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.14em',
+                  padding: '3px 7px 3px 5px',
+                  borderRadius: 4,
+                  flexShrink: 0,
+                  boxShadow: '0 1px 4px rgba(22,163,74,0.35)',
+                }}
+              >
+                <span style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: '50%',
+                  background: '#fff',
+                  opacity: 0.9,
+                  animation: 'ia-pulse 1.2s ease-in-out infinite',
+                  flexShrink: 0,
+                }} />
+                Updates
+              </span>
+            )}
 
-      <div className="pcard-num">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <circle cx="12" cy="12" r="10"/>
-        </svg>
-        {patentNumber}
-      </div>
-      {pct > 50 && (
-        <div className="pcard-progress">
-        
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{
-              fontFamily: "'Inconsolata', monospace", fontSize: 9,
-              textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)',
-            }}>
-              Overlap Score
-            </span>
-            <span style={{
-              fontFamily: "'Libre Baskerville', serif", fontSize: 13, fontWeight: 700,
-              color: isExpired ? 'var(--red)' : isAbandoned ? 'var(--ink3)' : 'var(--accent)',
-            }}>
-              {pct}%
-            </span>
+            <div className="sb-folder-menu-wrap" ref={menuRef} style={{ position: 'relative' }}>
+              <button
+                className="card-ext"
+                aria-label="Move to folder"
+                onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
+              >
+                <MoreVertical size={13} />
+              </button>
+
+              {menuOpen && (
+                <div
+                  className="pcard-folder-menu"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="pcard-folder-menu-title">
+                    <FolderInput size={12} /> Move to folder
+                  </div>
+
+                  <button
+                    className={`pcard-folder-item${(!currentFolderIds.length) ? ' active' : ''}`}
+                    onClick={() => { onMoveToFolder?.(id, UNSORTED_ID, currentFolderIds); setMenuOpen(false); }}
+                  >
+                    <Folder size={13} /> Unsorted
+                  </button>
+
+                  {folders.length === 0 && (
+                    <div className="pcard-folder-empty">No folders yet</div>
+                  )}
+
+                  {folders.map((folder) => (
+                    <button
+                      key={folder._id}
+                      className={`pcard-folder-item${currentFolderIds.includes(folder._id) ? ' active' : ''}`}
+                      onClick={() => { onMoveToFolder?.(id, folder._id, currentFolderIds); setMenuOpen(false); }}
+                    >
+                      <Folder size={13} />
+                      <span>{folder.folder_name || folder.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              className="card-ext"
+              aria-label="Open"
+              onClick={e => { e.stopPropagation(); handleCardClick(); }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </button>
           </div>
-       
-        <div className="prog-track">
-          <div className={`prog-fill ${fillClass}`} style={{ width: `${pct}%` }} />
-        </div>
-        <div className="prog-dots" style={{ color: dotColor }}>
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="pdot" style={{ opacity: i < filledDots ? 0.35 : 0.1 }} />
-          ))}
-        </div>
-      </div>
-      )}
-      <div className="pcard-foot">
-        <div className="pcard-time">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
-          {updatedAt}
         </div>
 
-        {matchesCount > 0 && (
-          <div style={{ fontSize: 11, color: 'var(--amber, #B45309)', fontWeight: 600 }}>
-            {matchesCount} match{matchesCount !== 1 ? 'es' : ''}
+        <div className="pcard-title">{displayTitle}</div>
+
+        <div className="pcard-num">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+          {patentNumber}
+        </div>
+        {pct > 50 && (
+          <div className="pcard-progress">
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{
+                fontFamily: "'Inconsolata', monospace", fontSize: 9,
+                textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)',
+              }}>
+                Overlap Score
+              </span>
+              <span style={{
+                fontFamily: "'Libre Baskerville', serif", fontSize: 13, fontWeight: 700,
+                color: isExpired ? 'var(--red)' : isAbandoned ? 'var(--ink3)' : 'var(--accent)',
+              }}>
+                {pct}%
+              </span>
+            </div>
+
+            <div className="prog-track">
+              <div className={`prog-fill ${fillClass}`} style={{ width: `${pct}%` }} />
+            </div>
+            <div className="prog-dots" style={{ color: dotColor }}>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="pdot" style={{ opacity: i < filledDots ? 0.35 : 0.1 }} />
+              ))}
+            </div>
           </div>
         )}
+        <div className="pcard-foot">
+          <div className="pcard-time">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            {updatedAt}
+          </div>
+
+          {matchesCount > 0 && (
+            <div style={{ fontSize: 11, color: 'var(--amber, #B45309)', fontWeight: 600 }}>
+              {matchesCount} match{matchesCount !== 1 ? 'es' : ''}
+            </div>
+          )}
+        </div>
+
       </div>
 
-    </div>
+      <style>{`
+        .pcard-folder-menu {
+          position: absolute; top: 26px; right: 0; z-index: 50;
+          background: var(--panel, #fff); border: 1px solid var(--rule);
+          border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+          min-width: 180px; max-height: 220px; overflow-y: auto; padding: 4px;
+        }
+        .pcard-folder-menu-title {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+          color: var(--ink3); padding: 6px 8px 4px;
+        }
+        .pcard-folder-item {
+          display: flex; align-items: center; gap: 8px; width: 100%;
+          text-align: left; padding: 7px 8px; font-size: 12.5px;
+          background: none; border: none; border-radius: 5px; cursor: pointer;
+          color: var(--ink1);
+        }
+        .pcard-folder-item:hover { background: var(--rule2); }
+        .pcard-folder-item.active { font-weight: 600; color: var(--accent); }
+        .pcard-folder-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pcard-folder-empty { padding: 6px 8px; font-size: 12px; color: var(--ink3); }
+      `}</style>
+    </>
   );
 };
 
