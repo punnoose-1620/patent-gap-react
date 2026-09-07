@@ -1,6 +1,95 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Info } from 'lucide-react';
 import { patentApi } from '../../api/patentApi';
 
+
+// ── Small inline tooltip, shown right next to the row label. ──
+const LabelTooltip = ({ text }) => {
+  const [visible, setVisible] = useState(false);
+  const wrapRef = useRef(null);
+
+  const supportsHover = typeof window !== 'undefined'
+    && window.matchMedia
+    && window.matchMedia('(hover: hover)').matches;
+
+  if (!text) return null;
+
+  useEffect(() => {
+    if (!visible) return;
+    const handleOutside = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setVisible(false);
+      }
+    };
+    document.addEventListener('touchstart', handleOutside);
+    document.addEventListener('mousedown', handleOutside);
+    return () => {
+      document.removeEventListener('touchstart', handleOutside);
+      document.removeEventListener('mousedown', handleOutside);
+    };
+  }, [visible]);
+
+  const hoverHandlers = supportsHover
+    ? {
+        onMouseEnter: () => setVisible(true),
+        onMouseLeave: () => setVisible(false),
+      }
+    : {
+        onClick: (e) => {
+          e.stopPropagation();
+          setVisible(v => !v);
+        },
+      };
+
+  return (
+    <span
+      ref={wrapRef}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+      {...hoverHandlers}
+    >
+      <Info size={13} color="var(--accent)" style={{ cursor: 'help', flexShrink: 0, opacity: 0.85 }} />
+      {visible && (
+        <span
+          style={{
+            position: 'absolute',
+            bottom: '130%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'var(--accent)',
+            color: '#fff',
+            fontSize: 11.5,
+            lineHeight: 1.4,
+            padding: '7px 10px',
+            borderRadius: 6,
+            whiteSpace: 'normal',
+            width: 220,
+            maxWidth: '60vw',
+            textAlign: 'left',
+            zIndex: 20,
+            boxShadow: '0 4px 14px rgba(46,125,50,0.28)',
+            fontFamily: "'Inconsolata', monospace",
+            letterSpacing: '0.01em',
+          }}
+        >
+          {text}
+          <span
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0,
+              height: 0,
+              borderLeft: '5px solid transparent',
+              borderRight: '5px solid transparent',
+              borderTop: '5px solid var(--accent)',
+            }}
+          />
+        </span>
+      )}
+    </span>
+  );
+};
 // ── Normalize whatever shape `keywords` comes in as (array or
 // comma-string) into a clean array of trimmed, non-empty strings. ──
 const toArray = (val) => {
@@ -24,7 +113,7 @@ const toArray = (val) => {
  *  - icon: optional lucide icon component to render next to the label
  *  - label: row label text (defaults to "Keywords")
  */
-const EditableKeywordsRow = ({ caseId, initialValue, onSave, icon: Icon, label = 'Keywords' }) => {
+const EditableKeywordsRow = ({ caseId, initialValue, onSave, icon: Icon, label = 'Keywords', tooltip }) => {
   const [editing, setEditing]     = useState(false);
   const [keywords, setKeywords]   = useState(toArray(initialValue));
   const [inputValue, setInputValue] = useState('');
@@ -77,9 +166,10 @@ const EditableKeywordsRow = ({ caseId, initialValue, onSave, icon: Icon, label =
   if (!editing) {
     return (
       <div className="pd-info-row" style={{ position: 'relative' }}>
-        <div className="pd-info-label-wrap">
+                <div className="pd-info-label-wrap">
           {Icon && <Icon size={13} color="var(--ink3)" style={{ flexShrink: 0 }} />}
           <span className="pd-info-label">{label}</span>
+          <LabelTooltip text={tooltip} />
         </div>
         <span className="pd-info-value" style={{ flex: 1 }}>{displayValue}</span>
         <button
@@ -109,9 +199,10 @@ const EditableKeywordsRow = ({ caseId, initialValue, onSave, icon: Icon, label =
 
   return (
     <div className="pd-info-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-      <div className="pd-info-label-wrap">
+       <div className="pd-info-label-wrap">
         {Icon && <Icon size={13} color="var(--ink3)" style={{ flexShrink: 0 }} />}
         <span className="pd-info-label">{label}</span>
+        <LabelTooltip text={tooltip} />
       </div>
 
       <input
