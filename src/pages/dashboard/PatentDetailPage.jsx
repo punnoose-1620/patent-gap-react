@@ -3,7 +3,8 @@
 // Fully responsive — mobile (320px+), tablet (768px+), desktop (1024px+)
 // ===========================
 
-import { Clock, ArrowLeft, FileText, Calendar, User, Tag, Download, Trash2, RefreshCw, Search } from 'lucide-react';
+//import { Clock, ArrowLeft, FileText, Calendar, User, Tag, Download, Trash2, RefreshCw, Search } from 'lucide-react';
+import { Clock, ArrowLeft, FileText, Calendar, User, Tag, Download, Trash2, RefreshCw, Search, Info } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '../../hooks/useStore';
 import { useLocation, useNavigate, useSearchParams, Link } from 'react-router-dom';
@@ -223,8 +224,14 @@ const buildClaimsChartFromStoredRows = (caseInfringements, parentClaims = []) =>
 const normaliseMatch = (m) => {
   if (!m) return null;
 
-  // ── Nested-case format: has case_id + infringements[] with calculated_similarity_score ──
-  if (m.case_id && Array.isArray(m.infringements)) {
+  
+  const getMatchDate = (m) =>
+    m?.last_updated || m?.updated_date || m?.date || m?.created_date || m?.updatedAt || null;
+
+  const hasSimilarClaims = Array.isArray(m.similar_claims) && m.similar_claims.length > 0;
+  const hasNestedInfringements = Boolean(m.case_id) && Array.isArray(m.infringements) && m.infringements.length > 0;
+
+  if (hasNestedInfringements && !hasSimilarClaims) {
     console.log('entered 1');
     return {
       type:          'patent',
@@ -242,6 +249,7 @@ const normaliseMatch = (m) => {
       sameAsPatent:  m.same_as_patent || false,
       _isNestedCase: true,
       _entryId:      m.case_id,
+      lastUpdated: getMatchDate(m),
     };
   }
 
@@ -262,6 +270,7 @@ const normaliseMatch = (m) => {
       company:       null,
       matchedClaims: m.similar_claims?.map(c => c.claim) || null,
       _entryId:      m.product_id,
+      lastUpdated: getMatchDate(m),
     };
   }
  console.log('entered 3');
@@ -283,6 +292,7 @@ const normaliseMatch = (m) => {
     matchedClaims: m.similar_claims?.map(c => c.claim) || null,
     sameAsPatent:  m.same_as_patent || false,
     _entryId:      m.entry_id || m.patent || m.case_id,
+    lastUpdated: getMatchDate(m),
   };
 };
 // ─────────────────────────────────────────────────────────────
@@ -303,11 +313,100 @@ const StatusPill = ({ status }) => {
   );
 };
 
-const InfoRow = ({ icon: Icon, label, value }) => (
+const InfoRowTooltip = ({ text }) => {
+  const [visible, setVisible] = useState(false);
+  const wrapRef = useRef(null);
+
+  // True hover support (mouse/trackpad) vs touch — checked once
+  const supportsHover = typeof window !== 'undefined'
+    && window.matchMedia
+    && window.matchMedia('(hover: hover)').matches;
+
+  if (!text) return null;
+
+  useEffect(() => {
+    if (!visible) return;
+    const handleOutside = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setVisible(false);
+      }
+    };
+    document.addEventListener('touchstart', handleOutside);
+    document.addEventListener('mousedown', handleOutside);
+    return () => {
+      document.removeEventListener('touchstart', handleOutside);
+      document.removeEventListener('mousedown', handleOutside);
+    };
+  }, [visible]);
+
+  const hoverHandlers = supportsHover
+    ? {
+        onMouseEnter: () => setVisible(true),
+        onMouseLeave: () => setVisible(false),
+      }
+    : {
+        onClick: (e) => {
+          e.stopPropagation();
+          setVisible(v => !v);
+        },
+      };
+
+  return (
+    <span
+      ref={wrapRef}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+      {...hoverHandlers}
+    >
+      <Info size={13} color="var(--accent)" style={{ cursor: 'help', flexShrink: 0, opacity: 0.85 }} />
+      {visible && (
+        <span
+          style={{
+            position: 'absolute',
+            bottom: '130%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'var(--accent)',
+            color: '#fff',
+            fontSize: 11.5,
+            lineHeight: 1.4,
+            padding: '7px 10px',
+            borderRadius: 6,
+            whiteSpace: 'normal',
+            width: 220,
+            maxWidth: '60vw',
+            textAlign: 'left',
+            zIndex: 20,
+            boxShadow: '0 4px 14px rgba(46,125,50,0.28)',
+            fontFamily: "'Inconsolata', monospace",
+            letterSpacing: '0.01em',
+          }}
+        >
+          {text}
+          <span
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0,
+              height: 0,
+              borderLeft: '5px solid transparent',
+              borderRight: '5px solid transparent',
+              borderTop: '5px solid var(--accent)',
+            }}
+          />
+        </span>
+      )}
+    </span>
+  );
+};
+
+const InfoRow = ({ icon: Icon, label, value, tooltip }) => (
   <div className="pd-info-row">
     <div className="pd-info-label-wrap">
       <Icon size={13} color="var(--ink3)" style={{ flexShrink: 0 }} />
       <span className="pd-info-label">{label}</span>
+      <InfoRowTooltip text={tooltip} />
     </div>
     <span className="pd-info-value">{value}</span>
   </div>
@@ -315,7 +414,7 @@ const InfoRow = ({ icon: Icon, label, value }) => (
 
 
 
-const SectionCard = ({ title, eyebrow, icon: Icon, children, actions }) => (
+const SectionCard = ({ title, eyebrow, icon: Icon, children, actions, tooltip }) => (
   <div style={{ marginBottom: 20 }}>
     <div className="sec-hd" style={{ marginBottom: 12 }}>
       <div className="sec-hd-left">
@@ -329,7 +428,10 @@ const SectionCard = ({ title, eyebrow, icon: Icon, children, actions }) => (
               {eyebrow}
             </div>
           )}
-          <div className="sec-title">{title}</div>
+          <div className="sec-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {title}
+            {tooltip && <InfoRowTooltip text={tooltip} />}
+          </div>
         </div>
       </div>
       {actions && <div className="sec-hd-right">{actions}</div>}
@@ -338,6 +440,138 @@ const SectionCard = ({ title, eyebrow, icon: Icon, children, actions }) => (
   </div>
 );
 
+const SourceInfoModal = ({ matches, onClose }) => {
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  const rows = (matches || []).map(m => ({
+    name:   m.title || 'Untitled',
+    type:   m.type === 'product' ? 'Product' : 'Patent',
+    source: formatStatus(m.source || 'unknown'),
+    score:  m.score ?? 0,
+  }));
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === wrapRef.current) onClose(); }}
+      ref={wrapRef}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgba(20,20,18,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        style={{
+          background: 'var(--surf)', borderRadius: 12,
+          width: '100%', maxWidth: 640, maxHeight: '80vh',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '16px 20px', borderBottom: '1px solid var(--rule2)', flexShrink: 0,
+        }}>
+          <div>
+            <div style={{
+              fontFamily: "'Inconsolata', monospace", fontSize: 10,
+              textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)',
+              marginBottom: 2,
+            }}>
+              Infringement Analysis
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>
+              Source Info · {rows.length} match{rows.length !== 1 ? 'es' : ''}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: 6, borderRadius: 6, color: 'var(--ink3)',
+              display: 'flex', alignItems: 'center',
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--ink)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--ink3)'}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', padding: '4px 0' }}>
+          {rows.length === 0 ? (
+            <p style={{ padding: '24px 20px', fontSize: 13.5, color: 'var(--ink3)', fontStyle: 'italic', margin: 0 }}>
+              No matches available.
+            </p>
+          ) : (
+            <>
+              {/* Desktop/tablet table */}
+              <table className="src-info-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Source</th>
+                    <th style={{ textAlign: 'right' }}>Overlap</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={i}>
+                      <td className="src-info-name">{r.name}</td>
+                      <td>
+                        <span className={`pd-type-pill`} data-type={r.type === 'Product' ? 'product' : 'patent'}>
+                          {r.type}
+                        </span>
+                      </td>
+                      <td>{r.source}</td>
+                      <td style={{ textAlign: 'right', fontFamily: "'Inconsolata', monospace", fontWeight: 600 }}>
+                        {r.score}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Mobile stacked cards */}
+              <div className="src-info-cards">
+                {rows.map((r, i) => (
+                  <div key={i} className="src-info-card">
+                    <div className="src-info-card-top">
+                      <span className="src-info-name">{r.name}</span>
+                      <span style={{ fontFamily: "'Inconsolata', monospace", fontWeight: 600, fontSize: 12, color: 'var(--accent)' }}>
+                        {r.score}%
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span className="pd-type-pill" data-type={r.type === 'Product' ? 'product' : 'patent'}>
+                        {r.type}
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--ink3)' }}>{r.source}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
 
@@ -352,12 +586,16 @@ const PatentDetailPage = () => {
 
   const [matchTypeFilter, setMatchTypeFilter] = useState('product'); // default: product
 
+  const [sortBy, setSortBy] = useState('score'); // 'score' | 'updated'
+
   const caseIdFromUrl = searchParams.get('id');
   const projectData   = location.state || {};
   const caseId        = caseIdFromUrl || projectData.id;
 
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const fileInputRef   = useRef();
+
+  const [sourceInfoOpen, setSourceInfoOpen] = useState(false);
   
   const { patents } = useStore();
 
@@ -495,6 +733,7 @@ const PatentDetailPage = () => {
 
 
   const title          = caseData?.title    || projectData.title        || 'Untitled Case';
+  const displayTitle = caseData?.alias?.trim() ? caseData.alias : title;
   //const patentNumber   = caseData?.patentId || projectData.patentNumber || caseData?._id?.split('_')[1] || 'N/A';
   const patentNumber = caseData?.patentId || (caseData?._id ? String(caseData._id).split('_').pop() : 'N/A');
   const status         = getStatusShorthand(caseData?.status || projectData.status || 'draft');
@@ -510,12 +749,15 @@ const PatentDetailPage = () => {
   : caseData?.keywords || projectData.keywords || 'No keywords available';
   const source         = caseData?.source || projectData.source || 'Unknown source';
   const description    = caseData?.context || caseData?.description || projectData.description || 'No description available';
-  const matchesCount   = caseData?.infringements?.length ?? projectData.matchesCount ?? 0;
+  //const matchesCount   = caseData?.infringements?.length ?? projectData.matchesCount ?? 0;
+  
   const documentsCount = caseData?.documents?.length || projectData.documentsCount || 0;
   const isProcessing   = (caseData?.status || '').toLowerCase().includes('processing');
   const claimsChart    = caseData?.claimsChart || {};
   //const infringementAnalysisStatus = caseData?.infringementAnalysisStatus || 'unknown';
   const infringementAnalysisStatus = caseData?.infringement_analysis_status || 'unknown';
+
+  
 
   const patentStatusFlags  = caseData?.patent_status_flags  || {};
   const productStatusFlags = caseData?.product_status_flags || {};
@@ -578,32 +820,9 @@ console.log('🧾 displayClaims at render:', displayClaims, typeof displayClaims
 
 
   const realMatches = caseData?.infringements || [];
-  /*const realMatches = (caseData?.infringements || []).filter(
-      infringement => !new Set(caseData?.excluded_case_ids ?? []).has(infringement.case_id)
-    );*/
-  console.log('📋 Raw infringements from API:', realMatches);
 
-  console.log('🔢 total:', realMatches.length);
-console.log('🔢 nested-case (case_id + infringements[]):',
-  realMatches.filter(i => i.case_id && Array.isArray(i.infringements) && i.infringements.length > 0).length);
-console.log('🔢 nested-case but EMPTY infringements[]:',
-  realMatches.filter(i => i.case_id && Array.isArray(i.infringements) && i.infringements.length === 0).length);
-console.log('🔢 product_id:', realMatches.filter(i => i.product_id).length);
-console.log('🔢 standard patent (entry_id, no nested infringements[]):',
-  realMatches.filter(i => !i.product_id && !(i.case_id && Array.isArray(i.infringements)) && (i.entry_id || i.patent || i.case_id)).length);
 
- /* const potentialMatches = realMatches.length > 0
-    ? realMatches.map(m => {
-        const normalised = normaliseMatch(m);
-        console.log(`🔍 [${normalised.type.toUpperCase()}] Normalised match789:`, normalised);
-        return normalised;
-      })
-    : [];
-
-    console.log('🃏 All potential matches:', JSON.stringify(potentialMatches, null, 2));
-
-    const filteredMatches = potentialMatches.filter(m => m.type === matchTypeFilter);*/
-
+  
     const rawPotentialMatches = realMatches.length > 0
     ? realMatches.map(m => {
         const normalised = normaliseMatch(m);
@@ -633,12 +852,53 @@ console.log('🔢 standard patent (entry_id, no nested infringements[]):',
 
     console.log('🃏 All potential matches (deduped):', JSON.stringify(potentialMatches, null, 2));
 
-    const filteredMatches = potentialMatches.filter(m => m.type === matchTypeFilter);
+    //const filteredMatches = potentialMatches.filter(m => m.type === matchTypeFilter);
+
+    const filteredMatches = potentialMatches
+      .filter(m => m.type === matchTypeFilter)
+      .slice() // don't mutate potentialMatches
+      .sort((a, b) => {
+        if (sortBy === 'score') {
+          return (b.score ?? 0) - (a.score ?? 0); // highest similarity first
+        }
+        // sortBy === 'updated'
+        const aTime = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0;
+        const bTime = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0;
+        return bTime - aTime; // most recent first
+      });
 
 
     // always shows matches if they exist
     const shouldShowMatches = realMatches.length > 0;
     const shouldShowEmpty   = !analysisLoading && realMatches.length === 0;
+
+    const matchesCount   = potentialMatches.length;
+  /*const realMatches = (caseData?.infringements || []).filter(
+      infringement => !new Set(caseData?.excluded_case_ids ?? []).has(infringement.case_id)
+    );*/
+  console.log('📋 Raw infringements from API:', realMatches);
+
+  console.log('🔢 total:', realMatches.length);
+console.log('🔢 nested-case (case_id + infringements[]):',
+  realMatches.filter(i => i.case_id && Array.isArray(i.infringements) && i.infringements.length > 0).length);
+console.log('🔢 nested-case but EMPTY infringements[]:',
+  realMatches.filter(i => i.case_id && Array.isArray(i.infringements) && i.infringements.length === 0).length);
+console.log('🔢 product_id:', realMatches.filter(i => i.product_id).length);
+console.log('🔢 standard patent (entry_id, no nested infringements[]):',
+  realMatches.filter(i => !i.product_id && !(i.case_id && Array.isArray(i.infringements)) && (i.entry_id || i.patent || i.case_id)).length);
+
+ /* const potentialMatches = realMatches.length > 0
+    ? realMatches.map(m => {
+        const normalised = normaliseMatch(m);
+        console.log(`🔍 [${normalised.type.toUpperCase()}] Normalised match789:`, normalised);
+        return normalised;
+      })
+    : [];
+
+    console.log('🃏 All potential matches:', JSON.stringify(potentialMatches, null, 2));
+
+    const filteredMatches = potentialMatches.filter(m => m.type === matchTypeFilter);*/
+
     // iaIsInFlight is only used for the polling — keep it for that
     /*const iaStatus     = String(infringementAnalysisStatus || '').toLowerCase();
     const iaIsCompleted = iaStatus === 'completed';
@@ -1288,13 +1548,14 @@ useEffect(() => {
           <div className="page-hd pd-page-hd">
             <div style={{ minWidth: 0, flex: 1 }}>
               <div className="page-eyebrow">Patent Detail</div>
-              <h1 className="page-title pd-page-title" style={{ margin: 0 }}>
+             <h1 className="page-title pd-page-title" style={{ margin: 0 }}>
               <EditableTitleRow
                 caseId={caseId}
-                initialValue={title}
-                onSave={(newTitle) => setCaseData(prev => ({ ...prev, title: newTitle }))}
+                initialValue={displayTitle}
+                field="alias"
+                onSave={(newAlias) => setCaseData(prev => ({ ...prev, alias: newAlias }))}
               />
-            </h1>
+              </h1>
             </div>
             <div className="hd-actions pd-hd-actions">
               <button className="tn-btn" onClick={() => navigate(-1)}>
@@ -1405,9 +1666,14 @@ useEffect(() => {
           {/* ── Two-column info grid ── */}
           <div className="pd-two-col">
             <SectionCard title="Case Information" eyebrow="Patent Data" icon={FileText}>
+              <InfoRow icon={FileText} label="Original Title" value={title} />
+              {caseData?.alias?.trim() && (
+                <InfoRow icon={Tag} label="Alias" value={caseData.alias} />
+              )}
               <InfoRow icon={Calendar} label="Created"      value={formatDate(caseData?.created_date || caseData?.createdAt) || updatedAt} />
               <InfoRow icon={FileText} label="Filed"        value={filedDate} />
-              <InfoRow icon={Clock}    label="Last Updated" value={updatedAt} />
+              
+              <InfoRow icon={Clock} label="Last Updated" value={updatedAt} tooltip="The last time this case's data was updated." />
               {/*<InfoRow icon={User}     label="Inventors"    value={inventors} />*/}
               <EditableInventorsRow
                     caseId={caseId}
@@ -1421,16 +1687,19 @@ useEffect(() => {
                     }
                   />
               {/*<InfoRow icon={Tag}      label="Keywords"     value={keywords} />*/}
+             
               <EditableKeywordsRow
                 caseId={caseId}
                 icon={Tag}
                 label="Keywords"
+                tooltip="Used to search for and identify potential infringements of this patent."
                 initialValue={caseData?.keywords ?? projectData.keywords ?? []}
                 onSave={(newKeywords) => setCaseData(prev => ({ ...prev, keywords: newKeywords }))}
               />
               
-              <InfoRow icon={Tag}      label="Source"       value={formatStatus(source)} />
-            </SectionCard>
+              <InfoRow icon={Tag} label="Source" value={formatStatus(source)} />
+              
+              </SectionCard>
 
             {/* Context & Description — editable */}
             <SectionCard title="Context & Description" eyebrow="Overview" icon={FileText}>
@@ -1468,21 +1737,31 @@ useEffect(() => {
           <div className="pd-sl-ri-row">
 
             {/* ── Search Limitations ── */}
-            <SectionCard title="Search Limitations" eyebrow="User Defined" icon={Search}>
-                <SearchLimitationEditor
-                  caseId={caseId}
-                  initialData={caseData?.searchLimitations}
-                  onSave={(data) =>
-                    setCaseData(prev => ({
-                      ...prev,
-                      searchLimitations: data,
-                    }))
-                  }
-                />
+            <SectionCard
+              title="Search Limitations"
+              eyebrow="User Defined"
+              icon={Search}
+              tooltip="Constraints that narrow the infringement search, such as excluded companies, regions, or date ranges."
+            >
+              <SearchLimitationEditor
+                caseId={caseId}
+                initialData={caseData?.searchLimitations}
+                onSave={(data) =>
+                  setCaseData(prev => ({
+                    ...prev,
+                    searchLimitations: data,
+                  }))
+                }
+              />
             </SectionCard>
 
             {/* ── Related IDs ── */}
-            <SectionCard title="Related IDs" eyebrow="Patent Family" icon={FileText}>
+            <SectionCard
+              title="Related IDs"
+              eyebrow="Patent Family"
+              icon={FileText}
+              tooltip="Other identifiers associated with this patent family, such as application, publication, or priority numbers."
+            >
                 {caseData?.other_ids?.filter(item =>
                   Array.isArray(item.value) ? item.value.length > 0 : Boolean(item.value)
                 ).length > 0 ? (
@@ -1834,6 +2113,22 @@ useEffect(() => {
       }}>
         {matchesCount} match{matchesCount !== 1 ? 'es' : ''}
       </span>
+      {/* ← NEW: Source Info link */}
+      {potentialMatches.length > 0 && (
+        <button
+          onClick={() => setSourceInfoOpen(true)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 5,
+            fontFamily: "'Inconsolata', monospace", fontSize: 11, fontWeight: 600,
+            color: 'var(--accent)', padding: '5px 4px',
+            textDecoration: 'underline', textUnderlineOffset: 3,
+          }}
+        >
+          <Info size={12} />
+          Source Info
+        </button>
+      )}
 
       <button
         onClick={() => setMatchesExpanded(prev => !prev)}
@@ -1856,9 +2151,7 @@ useEffect(() => {
     </div>
   </div>
 
-  
- 
-  {/* ── Infringement Sources ── */}
+    
       {/* ── Infringement Sources ── */}
 {(() => {
   // Only look at infringements matching the CURRENTLY SELECTED tab
@@ -1895,6 +2188,30 @@ useEffect(() => {
 })()}
   {/* ── Filter tabs ── */}
   {matchesExpanded && (
+
+    <>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      <span style={{
+        fontFamily: "'Inconsolata', monospace", fontSize: 10,
+        textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)',
+      }}>
+        Sort by
+      </span>
+      <select
+        value={sortBy}
+        onChange={(e) => setSortBy(e.target.value)}
+        style={{
+          fontFamily: "'Inconsolata', monospace", fontSize: 11, fontWeight: 600,
+          color: 'var(--ink)', background: 'var(--surf)',
+          border: '1px solid var(--rule2)', borderRadius: 5,
+          padding: '4px 8px', cursor: 'pointer',
+        }}
+      >
+        <option value="score">Similarity Score</option>
+        <option value="updated">Last Updated</option>
+      </select>
+    </div>
+        
     <div style={{
       display: 'flex', gap: 6, marginBottom: 14,
       borderBottom: '1px solid var(--rule2)', paddingBottom: 0,
@@ -1934,7 +2251,9 @@ useEffect(() => {
         </button>
       ))}
     </div>
+    </>
   )}
+
 
   {/* ── Collapsible content ── */}
   {matchesExpanded && (
@@ -2147,22 +2466,22 @@ useEffect(() => {
         }
 
       
-  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 
-  /* ── ADD THESE THREE LINES ── */
-  .prog-fill.red   { background: var(--red,   #B22222); }
-  .prog-fill.amber { background: var(--amber, #b45309); }
-  .prog-fill.green { background: var(--accent,#2E7D32); }
+        /* ── ADD THESE THREE LINES ── */
+        .prog-fill.red   { background: var(--red,   #B22222); }
+        .prog-fill.amber { background: var(--amber, #b45309); }
+        .prog-fill.green { background: var(--accent,#2E7D32); }
 
-  /* ── Also fix pcard-badge for amber (medium risk) ── */
-  .pcard-badge.expired   { background: var(--red-soft);   color: var(--red);    }
-  .pcard-badge.abandoned { background: var(--amber-soft); color: var(--amber);  }
-  .pcard-badge.patented  { background: var(--acc-soft);   color: var(--accent); }
+        /* ── Also fix pcard-badge for amber (medium risk) ── */
+        .pcard-badge.expired   { background: var(--red-soft);   color: var(--red);    }
+        .pcard-badge.abandoned { background: var(--amber-soft); color: var(--amber);  }
+        .pcard-badge.patented  { background: var(--acc-soft);   color: var(--accent); }
 
-  /* ── And pcard border colors ── */
-  .pcard.expired   { border-color: rgba(178,34,34,0.25);  }
-  .pcard.abandoned { border-color: rgba(180,83,9,0.25);   }
-  .pcard.patented  { border-color: rgba(46,125,50,0.25);  }
+        /* ── And pcard border colors ── */
+        .pcard.expired   { border-color: rgba(178,34,34,0.25);  }
+        .pcard.abandoned { border-color: rgba(180,83,9,0.25);   }
+        .pcard.patented  { border-color: rgba(46,125,50,0.25);  }
 
 
         /* ── Badges ── */
@@ -2373,7 +2692,42 @@ useEffect(() => {
 
         /* Prevent the whole content column from ever forcing page-level horizontal scroll */
         .dash-content { min-width: 0; overflow-x: hidden; }
+
+        /* ── Source Info table/cards ── */
+        .src-info-table { width: 100%; border-collapse: collapse; }
+        .src-info-table th {
+          text-align: left; font-family: 'Inconsolata', monospace; font-size: 10px;
+          text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink3);
+          padding: 8px 20px; border-bottom: 1px solid var(--rule2);
+        }
+        .src-info-table td {
+          padding: 10px 20px; font-size: 13px; color: var(--ink);
+          border-bottom: 1px solid var(--rule2);
+        }
+        .src-info-table tr:last-child td { border-bottom: none; }
+        .src-info-name { font-weight: 600; }
+
+        .src-info-cards { display: none; }
+
+        @media (max-width: 640px) {
+          .src-info-table { display: none; }
+          .src-info-cards { display: flex; flex-direction: column; }
+          .src-info-card {
+            padding: 12px 16px; border-bottom: 1px solid var(--rule2);
+            display: flex; flex-direction: column; gap: 6px;
+          }
+          .src-info-card:last-child { border-bottom: none; }
+          .src-info-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+          .src-info-card .src-info-name { font-size: 13px; }
+        }
       `}</style>
+      {/* ── Source Info modal ── */}
+      {sourceInfoOpen && (
+        <SourceInfoModal
+          matches={potentialMatches}
+          onClose={() => setSourceInfoOpen(false)}
+        />
+      )}
 
       {/* ── Infringement match modal (unchanged) ── */}
       {selectedMatch && (
