@@ -117,8 +117,12 @@ const getDisplayClaimsList = (claimsData) => {
 const normaliseInfringement = (m) => {
   if (!m) return null;
 
-  // Nested-case format — has case_id + its own infringements[]
-  if (m.case_id && Array.isArray(m.infringements)) {
+  const hasSimilarClaims = Array.isArray(m.similar_claims) && m.similar_claims.length > 0;
+  const hasNestedInfringements = Boolean(m.case_id) && Array.isArray(m.infringements) && m.infringements.length > 0;
+
+  // Nested-case format — has case_id + its own infringements[].
+  // Only used when there's no similar_claims data to prefer.
+  if (hasNestedInfringements && !hasSimilarClaims) {
     return {
       type:          'patent',
       title:         m.entry_title || m.title || `Case ${m.case_id}`,
@@ -132,7 +136,6 @@ const normaliseInfringement = (m) => {
       _isNestedCase: true,
     };
   }
-
   const isProduct = Boolean(m.product_id);
 
   if (isProduct) {
@@ -323,7 +326,7 @@ if (isProduct) {
       justification:   sc.justification     || null,
     };
   });
-} else {
+/*} else {
   // Patent: resolve each row's reference claim via ref_claim_index/ref_claim_flag
   const patentClaims = caseData?.claims || [];
   return similarClaims.map((sc, index) => {
@@ -343,6 +346,29 @@ if (isProduct) {
       similarityScore: sc?.similarity_score ?? null,
       urlToClaim:      sc?.url_to_claim     || null,
       justification:   null,
+    };
+  });
+}*/
+
+} else {
+  // Patent: resolve each row's reference claim via ref_claim_index/ref_claim_flag
+  const patentClaims = caseData?.claims || [];
+  return similarClaims.map((sc, index) => {
+    const refClaim = getReferenceClaimText(patentClaims, sc?.ref_claim_index, sc?.ref_claim_flag);
+
+    let fallback = '—';
+    if (!refClaim && Array.isArray(patentClaims) && patentClaims[index]) {
+      const parts = patentClaims[index].split('. ');
+      fallback = parts.length > 1 ? parts.slice(1).join('. ').trim() : patentClaims[index];
+    }
+
+    return {
+      claimNumber:     index + 1,
+      yourClaim:       refClaim ?? fallback,
+      similarClaim:    sc?.claim             || null,
+      similarityScore: sc?.similarity_score  ?? null,
+      urlToClaim:      sc?.url_to_claim      || null,
+      justification:   sc?.justification     || null,   // ← was hardcoded null
     };
   });
 }
@@ -923,7 +949,7 @@ if (isProduct) {
                         </th>
                         <th style={{ width:112 }}>Similarity</th>
                         {/* Justification column — product only */}
-                        {isProduct && !isNested && <th style={{ width:'22%' }}>Justification</th>}
+                        {!isNested && <th style={{ width:'22%' }}>Justification</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -967,24 +993,22 @@ if (isProduct) {
                                   <span style={{ color:'var(--ink3)', fontSize:12 }}>—</span>
                                 )}
                               </td>
-                              {/* Justification cell — product only, not nested */}
-                              {isProduct && !isNested && (
-                                <td>
-                                  {row.justification ? (
-                                    <div className="_im_justification">
-                                      {row.justification}
-                                    </div>
-                                  ) : (
-                                    <span style={{ color:'var(--ink3)', fontSize:12 }}>—</span>
-                                  )}
-                                </td>
-                              )}
+                              {/* Justification cell —  not nested */}
+                              {!isNested && (
+                              <td>
+                                {row.justification ? (
+                                  <div className="_im_justification">{row.justification}</div>
+                                ) : (
+                                  <span style={{ color:'var(--ink3)', fontSize:12 }}>—</span>
+                                )}
+                              </td>
+                            )}
                             </tr>
                           );
                         })
                       ) : (
                         <tr>
-                          <td colSpan={isProduct && !isNested ? 5 : 4} style={{ textAlign:'center', padding:'36px 14px', color:'var(--ink3)', fontFamily:"'Inconsolata',monospace", fontSize:12 }}>
+                          <td colSpan={!isNested ? 5 : 4} style={{ textAlign:'center', padding:'36px 14px', color:'var(--ink3)', fontFamily:"'Inconsolata',monospace", fontSize:12 }}>
                             No claim data available
                           </td>
                         </tr>
