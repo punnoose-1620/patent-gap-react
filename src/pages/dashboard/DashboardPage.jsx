@@ -13,6 +13,9 @@ import DashboardSidebar from '../../components/layout/DashboardSidebar';
 import NotificationBell from '../../components/dashboard/NotificationBell'; 
 import FetchBar from '../../components/dashboard/FetchBar';
 import { useUser } from '../../hooks/useUser';
+import FolderTabsBar from '../../components/dashboard/FolderTabsBar'
+import { useFolders, bucketCasesByFolder, UNSORTED_ID } from '../../hooks/useFolders'
+
 import {
   isAnalysisInFlight,
   isAnalysisCompleted,
@@ -131,6 +134,8 @@ const STAT_STATUS_MAP = {
   clearedPatents:   ['complete', 'cleared', 'expired', 'abandoned'],
 };
 
+
+
 export default function DashboardPage() {
   const { patents, ui } = useStore();
   const { setPage, clearError } = useUI();
@@ -144,6 +149,11 @@ export default function DashboardPage() {
   const [errorIds, setErrorIds] = useState([]);
 
   console.log(fetchingIds, 'fetchingIds');
+
+
+  const { folders, addCaseToFolder, removeCaseFromFolder } = useFolders()
+  const [activeFolderId, setActiveFolderId] = useState(UNSORTED_ID)
+  
 
   
 
@@ -295,6 +305,24 @@ export default function DashboardPage() {
     //alert('Next filter: ' + next);
     filterPatents({ status: next });
   };
+  const handleMoveToFolder = async (patentId, targetFolderId, currentFolderIds = []) => {
+    try {
+      // Remove from any folder it's currently in (a case lives in exactly one folder here)
+      await Promise.all(
+        currentFolderIds
+          .filter(fid => fid !== targetFolderId)
+          .map(fid => removeCaseFromFolder(fid, patentId))
+      );
+      // Add to the new folder (skip if moving to "Unsorted", which just means "no folder")
+      if (targetFolderId !== UNSORTED_ID) {
+        await addCaseToFolder(targetFolderId, patentId);
+      }
+      await handleLoadDashboard(); // refresh patent list so folder membership updates
+    } catch (e) {
+      alert(e.message || 'Could not move patent');
+    }
+  };
+
 
   const mappedPatents = patents.patents.map(p => {
     const riskLevel = calculatePatentRisk(p.infringements || []);
@@ -381,6 +409,7 @@ export default function DashboardPage() {
     return {
       id: p._id,
       title: p.title || p.name || 'Untitled Project',
+      alias: p.alias || '',
       //patentNumber: p.patentId || String(p._id || '').split('_')[1] || 'N/A',
       patentNumber: p.patentId || (p._id ? String(p._id).split('_').pop() : 'N/A'),
       status: getStatusShorthand(p.status),
@@ -399,6 +428,7 @@ export default function DashboardPage() {
       hasUpdates,
       last_viewed: p.last_viewed,
       last_updated: p.last_updated,
+      folders: p.folders || p.folder_ids || [],
     };
   });
 
@@ -406,11 +436,13 @@ export default function DashboardPage() {
   
   console.log('📋 All statuses:', mappedPatents.map(p => ({ title: p.title, status: p.status, id: p.patentNumber, updates: p.hasUpdates, last_viewed: p.last_viewed, last_updated: p.last_updated })));
   
+  const folderBuckets = bucketCasesByFolder(mappedPatents, folders)
+  const folderFilteredPatents = folderBuckets[activeFolderId] || []
 
   const localHighRiskMatches = mappedPatents.filter(p => p.isHighRisk).length;
   const highRiskMatchesValue = patents.stats.highRiskMatches || localHighRiskMatches;
 
-  const statusFilteredPatents = (() => {
+  /*const statusFilteredPatents = (() => {
     if (!statusFilter || statusFilter === 'all') return mappedPatents;
     if (statusFilter === 'highRiskMatches') {
       return mappedPatents.filter(p => p.isHighRisk);
@@ -418,7 +450,17 @@ export default function DashboardPage() {
     const allowed = STAT_STATUS_MAP[statusFilter];
     if (!allowed || allowed === 'all') return mappedPatents;
     return mappedPatents.filter(p => allowed.includes(p.status));
-  })();
+  })();*/
+
+  const statusFilteredPatents = (() => {
+      if (!statusFilter || statusFilter === 'all') return folderFilteredPatents;
+      if (statusFilter === 'highRiskMatches') {
+        return folderFilteredPatents.filter(p => p.isHighRisk);
+      }
+      const allowed = STAT_STATUS_MAP[statusFilter];
+      if (!allowed || allowed === 'all') return folderFilteredPatents;
+      return folderFilteredPatents.filter(p => allowed.includes(p.status));
+   })();
 
   const filteredPatents = searchQuery.trim()
     ? statusFilteredPatents.filter(p =>
@@ -436,6 +478,18 @@ export default function DashboardPage() {
   );
   console.log('Active patents count:', activePatents.length);
   console.log('Closed patents count:', closedPatents.length);
+
+  // Replace the global-based counts with folder-scoped ones
+  const scopedActive = folderFilteredPatents.filter(p =>
+    ['patented', 'active'].includes(p.status)
+  ).length;
+
+  const scopedCleared = folderFilteredPatents.filter(p =>
+    ['complete', 'cleared', 'expired', 'abandoned'].includes(p.status)
+  ).length;
+
+  const scopedHighRisk = folderFilteredPatents.filter(p => p.isHighRisk).length;
+
 
   const sectionTitle = (() => {
     if (searchQuery.trim()) return `Results for "${searchQuery}"`;
@@ -457,6 +511,7 @@ export default function DashboardPage() {
       state: {
         id: patent.id,
         title: patent.title,
+        alias: patent.alias,
         patentNumber: patent.patentNumber,
         status: patent.status,
         updatedAt: patent.updatedAt,
@@ -478,6 +533,8 @@ export default function DashboardPage() {
         onItemClick={setActiveItem}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        activeFolderId={activeFolderId}
+        onSelectFolder={setActiveFolderId}
       />
 
       <main className="dash-main">
@@ -611,7 +668,8 @@ export default function DashboardPage() {
           <div className="stats-grid">
             <StatCard
               title="Active Scans"
-              value={ui.loading ? '—' : (patents.stats.activeScans || activePatents.length)}
+              //value={ui.loading ? '—' : (patents.stats.activeScans || activePatents.length)}
+              value={ui.loading ? '—' : scopedActive}
               subtitle="This week"
               icon={<Search size={18} />}
               color="blue"
@@ -621,7 +679,8 @@ export default function DashboardPage() {
             <StatCard
               title="Patents Analyzed"
              // value={ui.loading ? '—' : (patents.stats.patentsAnalyzed || patents.patents.length)}
-              value={ui.loading ? '—' : (patents.patents.length)}
+              //value={ui.loading ? '—' : (patents.patents.length)}
+              value={ui.loading ? '—' : folderFilteredPatents.length}
               subtitle="Total"
               icon={<FileText size={18} />}
               color="purple"
@@ -630,7 +689,8 @@ export default function DashboardPage() {
             />
             <StatCard
               title="High Risk Matches"
-              value={ui.loading ? '—' : highRiskMatchesValue}
+              //value={ui.loading ? '—' : highRiskMatchesValue}
+              value={ui.loading ? '—' : scopedHighRisk}
               subtitle="Requires attention"
               icon={<AlertTriangle size={18} />}
               color="yellow"
@@ -640,7 +700,8 @@ export default function DashboardPage() {
             
             <StatCard
               title="Cleared Patents"
-              value={ui.loading ? '—' : (closedPatents.length)}
+              //value={ui.loading ? '—' : (closedPatents.length)}
+              value={ui.loading ? '—' : scopedCleared}
              // value={ui.loading ? '—' : (patents.stats.clearedPatents || closedPatents.length)}
               //value={ui.loading ? '—' : (closedPatents.length)}
               //subtitle="No infringement"
@@ -684,6 +745,13 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
+
+          <FolderTabsBar
+            folders={folders}
+            activeFolderId={activeFolderId}
+            onSelectFolder={setActiveFolderId}
+            counts={folderBuckets}
+          />
 
           {/* ── Loading state ── */}
           {ui.loading && (
@@ -750,7 +818,12 @@ export default function DashboardPage() {
                     style={{ animationDelay: `${0.5 + index * 0.1}s`, opacity: 0 }}
                   >
                     
-                   <ProjectCard {...patent} riskLevel={patent.riskLevel} hasUpdates={patent.hasUpdates} />
+                   <ProjectCard {...patent} 
+                      currentFolderIds={patent.folders}
+                      riskLevel={patent.riskLevel} 
+                      hasUpdates={patent.hasUpdates} 
+                      folders={folders}
+                      onMoveToFolder={handleMoveToFolder} />
                   </div>
                 ))}
               </div>
@@ -767,6 +840,8 @@ export default function DashboardPage() {
               )}
             </>
           )}
+
+         
 
           {/* ── Weekly Search Section ── */}
           {!searchQuery.trim() && (!statusFilter || statusFilter === 'all') && (
