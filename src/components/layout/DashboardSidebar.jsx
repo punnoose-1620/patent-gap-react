@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { useState } from 'react'
 import { Bug } from 'lucide-react'
+import FoldersNav from './FoldersNav'
 
 const BUG_REPORT_URL =
   import.meta.env.VITE_BUG_REPORT_URL ||
@@ -57,7 +58,7 @@ const NAV_ITEMS = [
             <line x1="6" y1="20" x2="6" y2="14"/>
           </svg>
         ),
-        label: 'Reports', id: 'reports', badge: null, wip: true,
+        label: 'Reports', id: 'reports', badge: null, href: '/reports',
       },
       {
         icon: (
@@ -100,7 +101,7 @@ const NAV_ITEMS = [
   },
 ]
 
-export default function DashboardSidebar({ activeItem, onItemClick, isOpen, onClose }) {
+export default function DashboardSidebar({ activeItem, onItemClick, isOpen, onClose, activeFolderId, onSelectFolder }) {
   const navigate = useNavigate()
   //const user = useSelector((state) => state.auth.user)
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0 })
@@ -190,8 +191,13 @@ export default function DashboardSidebar({ activeItem, onItemClick, isOpen, onCl
                 </button>
               ))}
               {si < NAV_ITEMS.length - 1 && <div className="sb-hr" />}
+
+                  
             </div>
           ))}
+
+          <div className="sb-hr" />
+                  <FoldersNav activeFolderId={activeFolderId} onSelectFolder={onSelectFolder} />
         </nav>
 
         {/* ✅ Bottom user section — clicking navigates to /profile */}
