@@ -45,14 +45,33 @@ const isPatentRecord = (inf) =>
  * only carry ref_claim_index, so we look it up in docClaims (the same flat,
  * order-preserving array getClaimRows() already produces).
  */
-const resolveRefClaimText = (docClaims, row) => {
-  if (row.ref_claim) return row.ref_claim;
-  if (row.ref_claim_index !== undefined && row.ref_claim_index !== null) {
-    return docClaims[row.ref_claim_index] ?? null;
-  }
-  return null;
-};
+/**
+ * Resolves the reference claim TEXT for a similar_claims-format row using
+ * ref_claim_index + ref_claim_flag, against the RAW claims object/array.
+ * Legacy infringements[] rows already carry a raw ref_claim string, so
+ * those are returned as-is.
+ */
+const resolveRefClaimText = (claimsObj, row, defaultFlag = 'original') => {
+  if (row.ref_claim) return row.ref_claim; // legacy format
 
+  const idx = row.ref_claim_index;
+  if (idx === undefined || idx === null || !claimsObj) return null;
+
+  // Flat array of claim strings — no market/documented distinction
+  if (Array.isArray(claimsObj)) {
+    return claimsObj[idx] ?? null;
+  }
+
+  const entry = claimsObj[idx] ?? claimsObj[String(idx)];
+  if (!entry) return null;
+  if (typeof entry === 'string') return entry;
+
+  const flag = (row.ref_claim_flag || defaultFlag || 'original').toLowerCase();
+  if (flag === 'market' || flag === 'market_language') {
+    return entry.market_language_claim ?? entry.documented_claim ?? null;
+  }
+  return entry.documented_claim ?? entry.market_language_claim ?? null;
+};
 /**
  * Normalizes claim text for comparison purposes only (never for display).
  * ref_claim strings and claim rows are supposed to be the same text, but
@@ -750,18 +769,13 @@ const PatentMatrix = ({ claimsObj, infringements }) => {
   // "no match" (see normalizeClaim's comment above for why this matters).
   const buildScoreMap = (inf) => {
     const map = new Map();
-    (inf.infringements || []).forEach(row => {
-      if (row.ref_claim) {
-        const key = normalizeClaim(row.ref_claim);
-        const existing = map.get(key) ?? 0;
-        map.set(key, Math.max(existing, row.calculated_similarity_score ?? 0));
-      }
-    });
-    // ← added: current-format rows
-    (inf.similar_claims || []).forEach(row => {
-      const refText = resolveRefClaimText(docClaims, row);
+    const hasSimilarClaims = Array.isArray(inf.similar_claims) && inf.similar_claims.length > 0;
+    const rows = hasSimilarClaims ? inf.similar_claims : (inf.infringements || []);
+
+    rows.forEach(row => {
+      const refText = resolveRefClaimText(claimsObj, row, 'original');
       if (!refText) return;
-      const key = normalizeClaim(refText);
+      const key   = normalizeClaim(refText);
       const score = row.similarity_score ?? row.calculated_similarity_score ?? 0;
       const existing = map.get(key) ?? 0;
       map.set(key, Math.max(existing, score));
@@ -794,7 +808,11 @@ const enriched = patentMatches.map((inf, idx) => ({
     get: (claim) => m._scoreMap.get(normalizeClaim(claim)),
   });
 
-  const getScore = (m) => avgPatentScore([...(m.infringements || []), ...(m.similar_claims || [])]);
+  //const getScore = (m) => avgPatentScore([...(m.infringements || []), ...(m.similar_claims || [])]);
+  const getScore = (m) => {
+    const hasSimilarClaims = Array.isArray(m.similar_claims) && m.similar_claims.length > 0;
+    return avgPatentScore(hasSimilarClaims ? m.similar_claims : (m.infringements || []));
+  };
 
   const totalMatches = docClaims.reduce((count, claim) =>
     count + enriched.filter(m => m._scoreMap.has(normalizeClaim(claim))).length, 0);
@@ -876,12 +894,12 @@ const ProductMatrix = ({ claimsObj, infringements }) => {
   /*const productMatches = infringements.filter(
   inf => inf.product_id && Array.isArray(inf.infringements)
 );*/
-const productMatches = mergeByKey(                      // ← wrap here
-    infringements.filter(
-      inf => inf.product_id && Array.isArray(inf.infringements)
-    ),
-    'product_id'
-  );
+const productMatches = mergeByKey(
+  infringements.filter(
+    inf => inf.product_id && Array.isArray(inf.similar_claims) && inf.similar_claims.length > 0
+  ),
+  'product_id'
+);
 
   if (!claimRows.length) {
     return (
@@ -919,13 +937,13 @@ const productMatches = mergeByKey(                      // ← wrap here
 
   const buildProductScoreMap = (inf) => {
   const map = new Map();
-  (inf.infringements || []).forEach(row => {
-    if (row.ref_claim) {
-      const key = normalizeClaim(row.ref_claim);
-      const score = row.calculated_similarity_score ?? row.similarity_score ?? 0;
-      const existing = map.get(key) ?? 0;
-      map.set(key, Math.max(existing, score));
-    }
+  (inf.similar_claims || []).forEach(row => {
+    const refText = resolveRefClaimText(claimsObj, row, 'market');
+    if (!refText) return;
+    const key   = normalizeClaim(refText);
+    const score = row.similarity_score ?? row.calculated_similarity_score ?? 0;
+    const existing = map.get(key) ?? 0;
+    map.set(key, Math.max(existing, score));
   });
   return map;
 };
@@ -946,7 +964,8 @@ const productMatches = mergeByKey(                      // ← wrap here
   });
 
   //const getScore = (m) => avgProductScore(m.similar_claims || []);
-  const getScore = (m) => avgProductScore(m.infringements || []);
+  //const getScore = (m) => avgProductScore(m.infringements || []);
+  const getScore = (m) => avgProductScore(m.similar_claims || []);
 
   const totalMatches = claimRows.reduce((count, c) =>
     count + enriched.filter(m => m._scoreMap.has(normalizeClaim(c))).length, 0);
@@ -1021,9 +1040,9 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
       inf => inf.product_id && Array.isArray(inf.similar_claims)
     );*/
 
-    const productInf = rawInfringements.filter(
-      inf => inf.product_id && Array.isArray(inf.infringements)
-    );
+   const productInf = rawInfringements.filter(
+    inf => inf.product_id && Array.isArray(inf.similar_claims) && inf.similar_claims.length > 0
+  );
 
     if (patentInf.length) {
       console.log('── Patent tab ──');
@@ -1046,7 +1065,10 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
   const hasPatentTab = rawInfringements.some(isPatentRecord);
 
   //const hasProductTab = rawInfringements.some(inf => inf.product_id && Array.isArray(inf.similar_claims));
-  const hasProductTab = rawInfringements.some(inf => inf.product_id && Array.isArray(inf.infringements));
+  //const hasProductTab = rawInfringements.some(inf => inf.product_id && Array.isArray(inf.infringements));
+  const hasProductTab = rawInfringements.some(
+  inf => inf.product_id && Array.isArray(inf.similar_claims) && inf.similar_claims.length > 0
+);
   // NOTE: hasObjClaims is no longer required to *show* the Product tab —
   // ProductMatrix already renders its own "market language only available…"
   // message internally when claims aren't in structured object form. Gating
@@ -1091,20 +1113,16 @@ const ClaimsMatrix = ({ displayClaims, potentialMatches, rawClaimsObj, rawInfrin
 const totalMatches = useMemo(() => {
   if (resolvedTab === 'patent') {
     const docClaims = getClaimRows(rawClaimsObj ?? displayClaims, 'documented');
-    const patentInf = mergeByKey(                              // ← was a plain filter
-      rawInfringements.filter(isPatentRecord),
-      'case_id'
-    );
+    const patentInf = mergeByKey(rawInfringements.filter(isPatentRecord), 'case_id');
+
     const maps = patentInf.map(inf => {
       const set = new Set();
-      (inf.infringements || []).forEach(row => {
-        if (row.ref_claim) set.add(normalizeClaim(row.ref_claim));
+      const hasSimilarClaims = Array.isArray(inf.similar_claims) && inf.similar_claims.length > 0;
+      const rows = hasSimilarClaims ? inf.similar_claims : (inf.infringements || []);
+      rows.forEach(row => {
+        const refText = resolveRefClaimText(rawClaimsObj ?? displayClaims, row, 'original');
+        if (refText) set.add(normalizeClaim(refText));
       });
-      // ← added: current-format rows
-    (inf.similar_claims || []).forEach(row => {
-      const refText = resolveRefClaimText(docClaims, row);
-      if (refText) set.add(normalizeClaim(refText));
-    });
       return set;
     });
     return docClaims.reduce((count, c) =>
@@ -1113,16 +1131,17 @@ const totalMatches = useMemo(() => {
 
   if (resolvedTab === 'product') {
     const claimRows = getClaimRows(rawClaimsObj ?? displayClaims, 'market');
-    const productInf = mergeByKey(                             // ← was a plain filter
+    const productInf = mergeByKey(
       rawInfringements.filter(
-        inf => inf.product_id && Array.isArray(inf.infringements)
+        inf => inf.product_id && Array.isArray(inf.similar_claims) && inf.similar_claims.length > 0
       ),
       'product_id'
     );
     const maps = productInf.map(inf => {
       const set = new Set();
-      (inf.infringements || []).forEach(row => {
-        if (row.ref_claim) set.add(normalizeClaim(row.ref_claim));
+      (inf.similar_claims || []).forEach(row => {
+        const refText = resolveRefClaimText(rawClaimsObj ?? displayClaims, row, 'market');
+        if (refText) set.add(normalizeClaim(refText));
       });
       return set;
     });
