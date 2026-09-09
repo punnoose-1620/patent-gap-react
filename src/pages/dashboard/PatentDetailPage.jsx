@@ -1673,7 +1673,7 @@ useEffect(() => {
               <InfoRow icon={Calendar} label="Created"      value={formatDate(caseData?.created_date || caseData?.createdAt) || updatedAt} />
               <InfoRow icon={FileText} label="Filed"        value={filedDate} />
               
-              <InfoRow icon={Clock} label="Last Updated" value={updatedAt} tooltip="The last time this case's data was updated." />
+              <InfoRow icon={Clock} label="Last Updated" value={updatedAt} tooltip="The last time this case's data was analysed or updated." />
               {/*<InfoRow icon={User}     label="Inventors"    value={inventors} />*/}
               <EditableInventorsRow
                     caseId={caseId}
@@ -1741,7 +1741,7 @@ useEffect(() => {
               title="Search Limitations"
               eyebrow="User Defined"
               icon={Search}
-              tooltip="Constraints that narrow the infringement search, such as excluded companies, regions, or date ranges."
+              tooltip="Constraints that narrow the infringement search for products, such as companies or urls."
             >
               <SearchLimitationEditor
                 caseId={caseId}
