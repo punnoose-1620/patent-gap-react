@@ -454,7 +454,11 @@ const SourceInfoModal = ({ matches, onClose }) => {
     type:   m.type === 'product' ? 'Product' : 'Patent',
     source: formatStatus(m.source || 'unknown'),
     score:  m.score ?? 0,
-  }));
+  }))
+  .sort((a, b) => b.score - a.score); // highest similarity score first
+  ;
+
+  
 
   return (
     <div
