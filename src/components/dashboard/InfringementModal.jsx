@@ -53,18 +53,81 @@ const calculateOverallRisk = (items) => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// Resolve the reference claim text for a similar_claims row using
+// ref_claim_index (which claim in the main claims collection) and
+// ref_claim_flag ('market' → market_language_claim, else documented_claim).
+// ─────────────────────────────────────────────────────────────
+const getReferenceClaimText = (claimsData, refClaimIndex, refClaimFlag) => {
+  if (!claimsData || refClaimIndex === undefined || refClaimIndex === null) return null;
+
+  const claimObj = Array.isArray(claimsData)
+    ? claimsData[refClaimIndex]
+    : (claimsData[refClaimIndex] ?? claimsData[String(refClaimIndex)]);
+
+  if (claimObj === undefined || claimObj === null) return null;
+
+  // Flat string claims (legacy format) — strip leading "1. " numbering
+  if (typeof claimObj === 'string') {
+    const parts = claimObj.split('. ');
+    return parts.length > 1 ? parts.slice(1).join('. ').trim() : claimObj;
+  }
+
+  // Object form: { documented_claim, market_language_claim, claim_type, ... }
+  if (typeof claimObj === 'object') {
+    if (refClaimFlag === 'market') {
+      return claimObj.market_language_claim ?? claimObj.documented_claim ?? null;
+    }
+    return claimObj.documented_claim ?? claimObj.market_language_claim ?? null;
+  }
+
+  return null;
+};
+
+// ─────────────────────────────────────────────────────────────
+// Normalise caseData.claims (array of strings OR object of
+// {documented_claim, market_language_claim}) into a flat display array.
+// ─────────────────────────────────────────────────────────────
+
+const getDisplayClaimsList = (claimsData) => {
+  if (!claimsData) return [];
+
+  const stripLeadingNumber = (text) => {
+    if (typeof text !== 'string') return text;
+    const parts = text.split('. ');
+    return parts.length > 1 && /^\d+$/.test(parts[0].trim())
+      ? parts.slice(1).join('. ').trim()
+      : text;
+  };
+
+  const values = Array.isArray(claimsData) ? claimsData : Object.values(claimsData);
+
+  return values
+    .map((v) => {
+      if (typeof v === 'object' && v !== null) {
+        return v.documented_claim ?? v.market_language_claim ?? null;
+      }
+      return typeof v === 'string' ? stripLeadingNumber(v) : null;
+    })
+    .filter(Boolean);
+};
+
+// ─────────────────────────────────────────────────────────────
 // Normalise a raw infringement object into a uniform shape.
 // ─────────────────────────────────────────────────────────────
 const normaliseInfringement = (m) => {
   if (!m) return null;
 
-  // Nested-case format — has case_id + its own infringements[]
-  if (m.case_id && Array.isArray(m.infringements)) {
+  const hasSimilarClaims = Array.isArray(m.similar_claims) && m.similar_claims.length > 0;
+  const hasNestedInfringements = Boolean(m.case_id) && Array.isArray(m.infringements) && m.infringements.length > 0;
+
+  // Nested-case format — has case_id + its own infringements[].
+  // Only used when there's no similar_claims data to prefer.
+  if (hasNestedInfringements && !hasSimilarClaims) {
     return {
       type:          'patent',
       title:         m.entry_title || m.title || `Case ${m.case_id}`,
       id:            m.case_id,
-      url:           m.document_urls?.[0] || m.entry_url || null,
+      url:           m.document_urls?.[0] || m.entry_url || m.url || null,
       source:        m.source || 'unknown',
       score:         calculateOverlapScore(m.infringements),
       riskLevel:     calculateOverallRisk(m.infringements),
@@ -73,7 +136,6 @@ const normaliseInfringement = (m) => {
       _isNestedCase: true,
     };
   }
-
   const isProduct = Boolean(m.product_id);
 
   if (isProduct) {
@@ -120,6 +182,10 @@ const InfringementModal = ({
   const [sameAsPatent, setSameAsPatent] = useState(false);
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState(null);
+  const PATENT_CLAIMS_PREVIEW_COUNT = 3; // how many claims show before "View all"
+
+  
+  const [patentClaimsExpanded, setPatentClaimsExpanded] = useState(false); // collapsed by default
 
   // Close on Escape
   useEffect(() => {
@@ -181,6 +247,7 @@ const InfringementModal = ({
   const entryId    = normInfData?.id      || match.id    || 'N/A';
   const source     = normInfData?.source  || match.source || (isProduct ? 'Amazon' : 'Google Patents');
   const entryUrl   = normInfData?.url     || match.url   || null;
+  console.log('Derived entryUrl:', entryUrl);
   //const caseLabel  = caseId ? (caseId.split('_')[1] || caseId) : (patentNumber || 'N/A');
   const caseLabel = caseId
   ? (String(caseId).split('_').pop() || caseId)
@@ -199,6 +266,10 @@ const InfringementModal = ({
   // Product claims
   const productClaims = normInfData?.productClaims || match.claims || [];
 
+  //Patent claims (for patent-type infringements)
+  const matchedPatentClaimsList = getDisplayClaimsList(normInfData?.claims || match.claims);
+
+
   // ── Build claim chart rows ──
   const claimRows = (() => {
     const similarClaims = normInfData?.similarClaims || match.similarClaims || [];
@@ -215,7 +286,7 @@ const InfringementModal = ({
       }));
     }
 
-    if (isProduct) {
+   /* if (isProduct) {
       return similarClaims.map((sc, index) => ({
         claimNumber:     index + 1,
         yourClaim:       productClaims[index] || '—',
@@ -241,7 +312,67 @@ const InfringementModal = ({
           justification:   null,
         };
       });
+    }*/
+
+if (isProduct) {
+  return similarClaims.map((sc, index) => {
+    const refClaim = getReferenceClaimText(caseData?.claims, sc?.ref_claim_index, sc?.ref_claim_flag);
+    return {
+      claimNumber:     index + 1,
+      yourClaim:       refClaim ?? productClaims[index] ?? '—', // fallback for old rows without ref_claim_index
+      similarClaim:    sc.claim             || null,
+      similarityScore: sc.similarity_score  ?? null,
+      urlToClaim:      sc.url_to_claim      || null,
+      justification:   sc.justification     || null,
+    };
+  });
+/*} else {
+  // Patent: resolve each row's reference claim via ref_claim_index/ref_claim_flag
+  const patentClaims = caseData?.claims || [];
+  return similarClaims.map((sc, index) => {
+    const refClaim = getReferenceClaimText(patentClaims, sc?.ref_claim_index, sc?.ref_claim_flag);
+
+    // fallback to old positional zip if this row has no ref_claim_index (legacy data)
+    let fallback = '—';
+    if (!refClaim && Array.isArray(patentClaims) && patentClaims[index]) {
+      const parts = patentClaims[index].split('. ');
+      fallback = parts.length > 1 ? parts.slice(1).join('. ').trim() : patentClaims[index];
     }
+
+    return {
+      claimNumber:     index + 1,
+      yourClaim:       refClaim ?? fallback,
+      similarClaim:    sc?.claim            || null,
+      similarityScore: sc?.similarity_score ?? null,
+      urlToClaim:      sc?.url_to_claim     || null,
+      justification:   null,
+    };
+  });
+}*/
+
+} else {
+  // Patent: resolve each row's reference claim via ref_claim_index/ref_claim_flag
+  const patentClaims = caseData?.claims || [];
+  return similarClaims.map((sc, index) => {
+    const refClaim = getReferenceClaimText(patentClaims, sc?.ref_claim_index, sc?.ref_claim_flag);
+
+    let fallback = '—';
+    if (!refClaim && Array.isArray(patentClaims) && patentClaims[index]) {
+      const parts = patentClaims[index].split('. ');
+      fallback = parts.length > 1 ? parts.slice(1).join('. ').trim() : patentClaims[index];
+    }
+
+    return {
+      claimNumber:     index + 1,
+      yourClaim:       refClaim ?? fallback,
+      similarClaim:    sc?.claim             || null,
+      similarityScore: sc?.similarity_score  ?? null,
+      urlToClaim:      sc?.url_to_claim      || null,
+      justification:   sc?.justification     || null,   // ← was hardcoded null
+    };
+  });
+}
+      
   })();
 
   // ─── JSX ─────────────────────────────────────────────────────────────────
@@ -447,6 +578,27 @@ const InfringementModal = ({
           letter-spacing:-0.02em; line-height:1.25; margin:0 0 10px;
           word-break:break-word;
         }
+          ._im_claims_toggle {
+          all:unset; cursor:pointer;
+          display:inline-flex; align-items:center; gap:5px;
+          font-family:'Inconsolata',monospace; font-size:10.5px; font-weight:600;
+          text-transform:uppercase; letter-spacing:0.08em;
+          color:var(--accent); background:var(--acc-soft);
+          padding:4px 10px; border-radius:6px;
+          white-space:nowrap; flex-shrink:0;
+          transition:background 0.15s;
+        }
+        ._im_claims_toggle:hover { background:rgba(46,125,50,0.16); }
+
+        ._im_claims_showmore {
+          all:unset; cursor:pointer; display:block; width:100%;
+          text-align:center;
+          font-family:'Inconsolata',monospace; font-size:11px; font-weight:600;
+          color:var(--accent); background:var(--acc-soft);
+          padding:7px 0; border-radius:7px;
+          transition:background 0.15s;
+        }
+        ._im_claims_showmore:hover { background:rgba(46,125,50,0.16); }
 
         /* ════ TABLET ════ */
         @media (max-width:1023px) {
@@ -668,7 +820,80 @@ const InfringementModal = ({
                 </div>
               )}
 
-              {/* Overlap score bar */}
+              {/* Patent claims preview (patent type only, not nested) — 
+              shows the MATCHED infringing patent's own claim list. Collapsible: only
+              the first PATENT_CLAIMS_PREVIEW_COUNT claims render until the user
+              expands, since these lists can run very long and were pushing the rest
+              of the modal (score bar, claim chart) far below the fold. */}
+              {!isProduct && matchedPatentClaimsList.length > 0 && (
+                <div style={{
+                  background:'var(--surf)', borderRadius:12,
+                  border:'1px solid var(--rule)', padding:'14px 18px', marginBottom:14,
+                }}>
+                  <div style={{
+                    display:'flex', alignItems:'center', justifyContent:'space-between',
+                    marginBottom:10, gap:10,
+                  }}>
+                    <div style={{ fontFamily:"'Inconsolata',monospace", fontSize:9.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--ink3)' }}>
+                      Patent Claims
+                      <span style={{ color:'var(--ink3)', opacity:0.7, marginLeft:6 }}>
+                        ({matchedPatentClaimsList.length})
+                      </span>
+                    </div>
+
+                    {matchedPatentClaimsList.length > PATENT_CLAIMS_PREVIEW_COUNT && (
+                      <button
+                        className="_im_claims_toggle"
+                        onClick={() => setPatentClaimsExpanded(prev => !prev)}
+                      >
+                        {patentClaimsExpanded
+                          ? 'Collapse'
+                          : `View all ${matchedPatentClaimsList.length}`}
+                        <svg
+                          width="10" height="10" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2.5"
+                          strokeLinecap="round" strokeLinejoin="round"
+                          style={{
+                            transition:'transform 0.2s ease',
+                            transform: patentClaimsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                          }}
+                        >
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {(patentClaimsExpanded
+                    ? matchedPatentClaimsList
+                    : matchedPatentClaimsList.slice(0, PATENT_CLAIMS_PREVIEW_COUNT)
+                  ).map((c, i) => (
+                    <p key={i} style={{
+                      fontSize:13, color:'var(--ink2)', lineHeight:1.65, margin:0,
+                      paddingBottom: 8,
+                      borderBottom: '1px solid var(--rule2)',
+                      marginBottom: 8,
+                    }}>
+                      <span style={{ fontFamily:"'Libre Baskerville',serif", fontWeight:700, color:'var(--accent)', marginRight:6 }}>
+                        {i + 1}.
+                      </span>
+                      {c}
+                    </p>
+                  ))}
+
+                  {!patentClaimsExpanded && matchedPatentClaimsList.length > PATENT_CLAIMS_PREVIEW_COUNT && (
+                    <button
+                      className="_im_claims_showmore"
+                      onClick={() => setPatentClaimsExpanded(true)}
+                    >
+                      + {matchedPatentClaimsList.length - PATENT_CLAIMS_PREVIEW_COUNT} more claim{matchedPatentClaimsList.length - PATENT_CLAIMS_PREVIEW_COUNT !== 1 ? 's' : ''}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Overlap score bar — only shown when score > 50 */}
+              {scoreNum > 50 && (
               <div style={{
                 background:'var(--surf)', borderRadius:12,
                 border:'1px solid var(--rule)',
@@ -682,7 +907,7 @@ const InfringementModal = ({
                   <div style={{ height:'100%', width:`${scoreNum}%`, background:riskColor, borderRadius:3, transition:'width 0.7s cubic-bezier(0.22,1,0.36,1)' }} />
                 </div>
               </div>
-
+            )}
               {/* Visit source button */}
               <div style={{ marginBottom:26 }}>
                 <button
@@ -717,14 +942,14 @@ const InfringementModal = ({
                         <th style={{ width:68 }}>Claim #</th>
                         {/* Column header adapts to format */}
                         <th style={{ width:'30%' }}>
-                          {isNested ? 'Reference Claim' : isProduct ? 'Product Claim' : 'Your Patent Claim'}
+                          {isNested ? 'Reference Claim' : isProduct ? 'Market Language Claim' : 'Your Patent Claim'}
                         </th>
                         <th>
                           {isNested ? 'Matched Claim' : 'Similar Infringing Claim'}
                         </th>
                         <th style={{ width:112 }}>Similarity</th>
                         {/* Justification column — product only */}
-                        {isProduct && !isNested && <th style={{ width:'22%' }}>Justification</th>}
+                        {!isNested && <th style={{ width:'22%' }}>Justification</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -768,24 +993,22 @@ const InfringementModal = ({
                                   <span style={{ color:'var(--ink3)', fontSize:12 }}>—</span>
                                 )}
                               </td>
-                              {/* Justification cell — product only, not nested */}
-                              {isProduct && !isNested && (
-                                <td>
-                                  {row.justification ? (
-                                    <div className="_im_justification">
-                                      {row.justification}
-                                    </div>
-                                  ) : (
-                                    <span style={{ color:'var(--ink3)', fontSize:12 }}>—</span>
-                                  )}
-                                </td>
-                              )}
+                              {/* Justification cell —  not nested */}
+                              {!isNested && (
+                              <td>
+                                {row.justification ? (
+                                  <div className="_im_justification">{row.justification}</div>
+                                ) : (
+                                  <span style={{ color:'var(--ink3)', fontSize:12 }}>—</span>
+                                )}
+                              </td>
+                            )}
                             </tr>
                           );
                         })
                       ) : (
                         <tr>
-                          <td colSpan={isProduct && !isNested ? 5 : 4} style={{ textAlign:'center', padding:'36px 14px', color:'var(--ink3)', fontFamily:"'Inconsolata',monospace", fontSize:12 }}>
+                          <td colSpan={!isNested ? 5 : 4} style={{ textAlign:'center', padding:'36px 14px', color:'var(--ink3)', fontFamily:"'Inconsolata',monospace", fontSize:12 }}>
                             No claim data available
                           </td>
                         </tr>

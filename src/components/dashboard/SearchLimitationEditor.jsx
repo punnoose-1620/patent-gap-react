@@ -97,25 +97,35 @@ const TagInput = ({ tags, onAdd, onRemove, placeholder }) => {
   const inputRef = useRef();
 
   const commit = () => {
-    const v = raw.replace(/,$/, '').trim();
-    if (!v) return;
+    // ── Split on commas so "gear,cable" — whether typed fast, pasted,
+    //    or delivered by autofill as one chunk in a single onChange —
+    //    becomes two separate tags instead of one invalid string. ──
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return;
 
-    // ── Alphanumeric validation ──────────────────────────────
-    if (!ALPHANUMERIC_REGEX.test(v)) {
-      setTagError(`"${v}" — only letters, numbers, spaces, and - _ . & are allowed`);
+    const badParts = [];
+    parts.forEach(v => {
+      // ── Alphanumeric validation ──────────────────────────────
+      if (ALPHANUMERIC_REGEX.test(v)) {
+        onAdd(v);
+      } else {
+        badParts.push(v);
+      }
+    });
+
+    if (badParts.length) {
+      setTagError(`"${badParts.join('", "')}" — only letters, numbers, spaces, and - _ . & are allowed`);
       setTimeout(() => setTagError(''), 3200);
-      return;
+    } else {
+      setTagError('');
     }
-    // ────────────────────────────────────────────────────────
 
-    onAdd(v);
     setRaw('');
-    setTagError('');
   };
 
 
   return (
-    <div style={wrapStyle()} onClick={() => inputRef.current?.focus()}>
+    <div style={wrapStyle(!!tagError)} onClick={() => inputRef.current?.focus()}>
       {tags.map((v, i) => (
         <span key={i} style={tagStyle}>
           {v}
@@ -130,16 +140,31 @@ const TagInput = ({ tags, onAdd, onRemove, placeholder }) => {
       <input
         ref={inputRef}
         value={raw}
-        onChange={e => setRaw(e.target.value)}
+        onChange={e => { setRaw(e.target.value); if (tagError) setTagError(''); }}
         onKeyDown={e => {
           if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(); }
           if (e.key === 'Backspace' && !raw && tags.length) onRemove(tags.length - 1);
+        }}
+        onPaste={e => {
+          // ── Handle pasted comma-separated text immediately ──
+          const pasted = e.clipboardData?.getData('text');
+          if (pasted && pasted.includes(',')) {
+            e.preventDefault();
+            setRaw(prev => prev + pasted);
+            // commit on next tick so `raw` state has updated
+            setTimeout(commit, 0);
+          }
         }}
         onBlur={commit}
         placeholder={tags.length ? '' : placeholder}
         autoComplete="off"
         style={rawInputStyle}
       />
+      {tagError && (
+        <p style={{ width: '100%', fontSize: 11, color: 'var(--red)', margin: '4px 0 0', fontFamily: "'Inconsolata', monospace" }}>
+          ✗ {tagError}
+        </p>
+      )}
     </div>
   );
 };
@@ -151,16 +176,26 @@ const UrlTagInput = ({ tags, onAdd, onRemove }) => {
   const inputRef = useRef();
 
   const commit = () => {
-    const v = raw.replace(/,$/, '').trim();
-    if (!v) return;
-    if (!URL_REGEX.test(v)) {
-      setUrlError(`"${v}" is not a valid URL — try www.example.org or https://example.org`);
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return;
+
+    const badParts = [];
+    parts.forEach(v => {
+      if (URL_REGEX.test(v)) {
+        onAdd(v);
+      } else {
+        badParts.push(v);
+      }
+    });
+
+    if (badParts.length) {
+      setUrlError(`"${badParts.join('", "')}" is not a valid URL — try www.example.org or https://example.org`);
       setTimeout(() => setUrlError(''), 3200);
-      return;
+    } else {
+      setUrlError('');
     }
-    onAdd(v);
+
     setRaw('');
-    setUrlError('');
   };
 
   return (
@@ -184,6 +219,14 @@ const UrlTagInput = ({ tags, onAdd, onRemove }) => {
           onKeyDown={e => {
             if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(); }
             if (e.key === 'Backspace' && !raw && tags.length) onRemove(tags.length - 1);
+          }}
+          onPaste={e => {
+            const pasted = e.clipboardData?.getData('text');
+            if (pasted && pasted.includes(',')) {
+              e.preventDefault();
+              setRaw(prev => prev + pasted);
+              setTimeout(commit, 0);
+            }
           }}
           onBlur={commit}
           placeholder={tags.length ? '' : 'www.example.org — press Enter or comma'}
@@ -213,9 +256,9 @@ const Field = ({ label, children }) => (
 );
 
 // ─── Main export ──────────────────────────────────────────────
-const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
+const SearchLimitationEditor = ({ caseId, initialData, allKeywords = [], onSave }) => {
   const [companies, setCompanies] = useState(initialData?.companies || []);
-  const [keywords,     setKeywords]     = useState(initialData?.keywords     || []);
+ // const [keywords,     setKeywords]     = useState(initialData?.keywords     || []);
   const [urls,      setUrls]      = useState(initialData?.urls      || []);
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -224,7 +267,7 @@ const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
   // Sync if parent re-fetches data
   useEffect(() => {
     setCompanies(initialData?.companies || []);
-    setKeywords(initialData?.keywords         || []);
+   // setKeywords(initialData?.keywords         || []);
     setUrls(initialData?.urls           || []);
   }, [initialData]);
 
@@ -232,7 +275,7 @@ const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
   const removeAt = setter => i  => setter(prev => prev.filter((_, idx) => idx !== i));
 
   const handleSave = async () => {
-    if (!companies.length && !keywords.length && !urls.length) {
+    if (!companies.length && !urls.length) {
       setSaveError('Add at least one value before saving.');
       return;
     }
@@ -240,11 +283,18 @@ const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
       //alert('This will save the search limitations to the case. The infringement analysis will then exclude any patents matching these companies, keywords, or URLs.');
       setSaving(true);
       setSaveError(null);
-      console.log('💾 Saving search limitations payload', caseId, { companies, keywords, urls });
+      // ── Merge: keep existing case keywords that weren't part of the
+      //    previous search-limitation set, then add the current limitation keywords ──
+      //const prevLimitationKeywords = initialData?.keywords || [];
+      //const keptExistingKeywords = allKeywords.filter(k => !prevLimitationKeywords.includes(k));
+      //const mergedKeywords = [...new Set([...keptExistingKeywords, ...keywords])];
+
+      console.log('💾 Saving search limitations payload', caseId, { companies, urls });
       await patentApi.updateCase(caseId, {
-        searchLimitations: { companies, keywords, urls },
+        searchLimitations: { companies, urls },
+           
       });
-      onSave?.({ companies, keywords, urls });
+      onSave?.({ companies, urls });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
@@ -258,7 +308,7 @@ const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
   const handleCancel = () => {
     
     setCompanies(initialData?.companies || []);
-    setKeywords(initialData?.keywords         || []);
+   // setKeywords(initialData?.keywords         || []);
     setUrls(initialData?.urls           || []);
     setSaveError(null);
   };
@@ -274,6 +324,11 @@ const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
         />
       </Field>
 
+     {/* ── Keywords / Terms field commented out — keywords are now edited
+      directly via EditableKeywordsRow on the case info panel instead.
+      `keywords` state + the merge logic in handleSave are left in place
+      untouched so existing search-limitation keywords still round-trip
+      correctly; there's just no UI here to add/remove them anymore. ──
       <Field label="Keywords / Terms">
         <TagInput
           tags={keywords}
@@ -282,6 +337,7 @@ const SearchLimitationEditor = ({ caseId, initialData, onSave }) => {
           placeholder="Type a keyword and press Enter or comma…"
         />
       </Field>
+      */}
 
       <Field label="Reference URLs">
         <UrlTagInput

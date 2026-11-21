@@ -101,7 +101,8 @@ console.log('🃏 MatchCard — full match object:', JSON.stringify(match, null,
         </div>
       )}
 
-      {/* ── Overlap score bar ── */}
+      {/* ── Overlap score bar — only shown when score > 50 ── */}
+    {match.score > 50 && (
       <div className="pcard-progress">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <span style={{
@@ -137,7 +138,7 @@ console.log('🃏 MatchCard — full match object:', JSON.stringify(match, null,
         )}
           */}
       </div>
-
+    )}
       {/* ── Footer: timestamp + live indicator + exclude button ── */}
       <div className="pcard-foot">
         <div className="pcard-time">

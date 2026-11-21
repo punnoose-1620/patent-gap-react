@@ -10,8 +10,16 @@ import StatCard from '../../components/dashboard/StatCard';
 import ProjectCard from '../../components/dashboard/ProjectCard';
 import ProjectModal from '../../components/dashboard/ProjectModal';
 import DashboardSidebar from '../../components/layout/DashboardSidebar';
-import NotificationBell from '../../components/dashboard/NotificationBell'; // ← NEW
+import NotificationBell from '../../components/dashboard/NotificationBell'; 
+import FetchBar from '../../components/dashboard/FetchBar';
 import { useUser } from '../../hooks/useUser';
+import FolderTabsBar from '../../components/dashboard/FolderTabsBar'
+import { useFolders, bucketCasesByFolder, UNSORTED_ID } from '../../hooks/useFolders'
+
+import {
+  isAnalysisInFlight,
+  isAnalysisCompleted,
+} from '../../utils/infringementAnalysisStatus';
 
 const getStatusShorthand = (status) => {
   status = String(status || '');
@@ -73,7 +81,7 @@ const calculatePatentOverlapScore = (infringements = []) => {
   return Math.round(avg * 100) / 100;
 };*/
 
-// REPLACE these three functions in DashboardPage.jsx
+
 
 const getClaimScore = (item) =>
   item?.calculated_similarity_score ?? item?.similarity_score ?? null;
@@ -120,11 +128,13 @@ const calculatePatentRisk = (infringements = []) => {
 
 
 const STAT_STATUS_MAP = {
-  activeScans:      ['patented'],
+  activeScans:      ['patented','active'],
   patentsAnalyzed:  'all',
   highRiskMatches:  ['patented'],
   clearedPatents:   ['complete', 'cleared', 'expired', 'abandoned'],
 };
+
+
 
 export default function DashboardPage() {
   const { patents, ui } = useStore();
@@ -133,6 +143,19 @@ export default function DashboardPage() {
   const { loadUserProfile } = useUser();
   const { logout } = useAuth();
   const navigate = useNavigate();
+
+  const [fetchingIds, setFetchingIds]     = useState([]);
+  const [initialFetchCount, setInitialFetchCount] = useState(0);
+  const [errorIds, setErrorIds] = useState([]);
+
+  console.log(fetchingIds, 'fetchingIds');
+
+
+  const { folders, addCaseToFolder, removeCaseFromFolder } = useFolders()
+  const [activeFolderId, setActiveFolderId] = useState(UNSORTED_ID)
+  
+
+  
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -158,6 +181,32 @@ export default function DashboardPage() {
     handleLoadDashboard();
     loadUserProfile();
   }, []);
+
+ /* useEffect(() => {
+  const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          //handleLoadDashboard(); // ← fresh data including updated last_viewed
+          setTimeout(() => handleLoadDashboard(), 1000); // ← wait 1s for last_viewed write
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);*/
+
+    useEffect(() => {
+        // Only poll if any patent has an in-flight analysis
+        const hasInFlight = patents.patents.some(p =>
+          isAnalysisInFlight(p.infringement_analysis_status)
+        );
+
+        if (!hasInFlight) return;
+
+        const interval = setInterval(() => {
+          handleLoadDashboard(); // ← re-fetches all patents including updated statuses
+        }, 30 * 1000); // every 30s
+
+        return () => clearInterval(interval);
+      }, [patents.patents]);
 
   const handleLoadDashboard = async () => {
     console.log('🔐 Session:', JSON.parse(localStorage.getItem('session') || '{}'));
@@ -191,12 +240,89 @@ export default function DashboardPage() {
     return () => observer.disconnect();
   }, [loadMorePatents]);
 
+  const hasInitialized = useRef(false);
+
+  useEffect(() => {
+        let cancelled = false;
+
+        const poll = async () => {
+          try {
+            const profile = await loadUserProfile();
+
+            console.log('🔍 Raw profile:', profile?.fetching_patents, profile?.error_patents);
+            if (cancelled) return;
+
+            // inside the poll function, replace the setFetchingIds calls:
+            const raw      = profile?.fetching_patents;
+            const rawError = profile?.error_patents;
+
+            const ids = raw
+              ? (Array.isArray(raw) ? raw : String(raw).split(',').map(s => s.trim()).filter(Boolean))
+              : [];
+
+            const errorIds = rawError
+              ? (Array.isArray(rawError) ? rawError : String(rawError).split(',').map(s => s.trim()).filter(Boolean))
+              : [];
+              
+            if (!hasInitialized.current && ids.length === 0 && errorIds.length === 0) {
+              hasInitialized.current = true;
+              return; 
+            }
+
+            hasInitialized.current = true;
+
+            //setInitialFetchCount(prev => prev === 0 && ids.length > 0 ? ids.length : prev);
+
+            // Only set initialCount when we FIRST see patents coming in — never reset it
+            setInitialFetchCount(prev => {
+              if (prev === 0 && ids.length > 0) return ids.length;
+              if (prev > 0 && ids.length > prev) return ids.length; // batch grew
+              return prev; // never decrease
+            });
+
+            setFetchingIds(ids);
+            setErrorIds(errorIds); // ← new state
+            console.log('⏱️ Polled fetching_ids:', ids, 'error_patents:', errorIds);
+          } catch (e) {
+            console.warn('fetching_id poll failed:', e);
+          }
+        };
+
+        poll(); // immediate first call
+        const interval = setInterval(poll, 3_000);
+
+        return () => {
+          cancelled = true;
+          clearInterval(interval);
+        };
+      }, []);
+
   // Toggle stat card filter: clicking the active card resets to 'all'
   const handleStatCardClick = (cardKey) => {
+    //alert('cardKey: ' + cardKey + '\nstatusFilter: ' + statusFilter);
     console.log('Stat card clicked:', cardKey);
     const next = statusFilter === cardKey ? 'all' : cardKey;
+    //alert('Next filter: ' + next);
     filterPatents({ status: next });
   };
+  const handleMoveToFolder = async (patentId, targetFolderId, currentFolderIds = []) => {
+    try {
+      // Remove from any folder it's currently in (a case lives in exactly one folder here)
+      await Promise.all(
+        currentFolderIds
+          .filter(fid => fid !== targetFolderId)
+          .map(fid => removeCaseFromFolder(fid, patentId))
+      );
+      // Add to the new folder (skip if moving to "Unsorted", which just means "no folder")
+      if (targetFolderId !== UNSORTED_ID) {
+        await addCaseToFolder(targetFolderId, patentId);
+      }
+      await handleLoadDashboard(); // refresh patent list so folder membership updates
+    } catch (e) {
+      alert(e.message || 'Could not move patent');
+    }
+  };
+
 
   const mappedPatents = patents.patents.map(p => {
     const riskLevel = calculatePatentRisk(p.infringements || []);
@@ -207,7 +333,7 @@ export default function DashboardPage() {
         ? new Date(lastUpdated) > lastViewed
         : false;  // ← if either is missing, no badge*/
 
-        const lastViewed  = p.last_viewed  ? new Date(p.last_viewed)  : null;
+        /*const lastViewed  = p.last_viewed  ? new Date(p.last_viewed)  : null;
 
         const rawUpdated  = p.last_updated || p.updated_date || p.lastUpdated;
 
@@ -221,11 +347,69 @@ export default function DashboardPage() {
 
         const hasUpdates = isValid(lastUpdated) && isValid(lastViewed)
           ? lastUpdated > lastViewed
-          : false;
+          : false;*/
+          const MONTHS = {
+            Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
+            Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12'
+          };
+
+         /* const parseRFC2822 = (str) => {
+            // "Sat, 23 May 2026 10:06:53 GMT"
+            const m = str.match(/^(\w+), (\d+) (\w+) (\d+) ([\d:]+) GMT$/);
+            if (!m) return null;
+            const [, , day, mon, year, time] = m;
+            const mm = MONTHS[mon];
+            if (!mm) return null;
+            return new Date(`${year}-${mm}-${day.padStart(2, '0')}T${time}Z`);
+          };
+
+          const lastViewed  = p.last_viewed  ? new Date(p.last_viewed)  : null;
+          const rawUpdated  = p.last_updated || p.updated_date || p.lastUpdated;
+          const lastUpdated = rawUpdated ? parseRFC2822(rawUpdated) : null;*/
+          // BEFORE — only handles RFC 2822
+
+          // AFTER — handles both RFC 2822 and ISO
+          const parseAnyDate = (str) => {
+            if (!str) return null;
+            // Try RFC 2822: "Sun, 24 May 2026 17:22:54 GMT"
+            const m = str.match(/^(\w+), (\d+) (\w+) (\d+) ([\d:]+) GMT$/);
+            if (m) {
+              const [, , day, mon, year, time] = m;
+              const mm = MONTHS[mon];
+              if (!mm) return null;
+              return new Date(`${year}-${mm}-${day.padStart(2, '0')}T${time}Z`);
+            }
+            // Fallback: ISO or any other format new Date() can handle
+            const d = new Date(str);
+            return isNaN(d.getTime()) ? null : d;
+          };
+
+          const lastViewed  = p.last_viewed  ? parseAnyDate(p.last_viewed)  : null;
+          const rawUpdated  = p.last_updated || p.updated_date || p.lastUpdated;
+          const lastUpdated = rawUpdated     ? parseAnyDate(rawUpdated)      : null;
+
+          const isValid = (d) => d instanceof Date && !isNaN(d);
+
+          const analysisCompleted = isAnalysisCompleted(p.infringement_analysis_status);
+
+        /*  const hasUpdates = analysisCompleted && isValid(lastUpdated) && isValid(lastViewed)
+            ? lastUpdated > lastViewed
+            : false;*/
+
+            const hasUpdates = analysisCompleted && isValid(lastUpdated) && isValid(lastViewed)
+                  ? (lastUpdated - lastViewed) > 2000  // only flag if > 2 seconds difference
+                  : false;
+
+          
+
+         /* const hasUpdates = isValid(lastUpdated) && isValid(lastViewed)
+            ? lastUpdated > lastViewed
+            : false;*/
 
     return {
       id: p._id,
       title: p.title || p.name || 'Untitled Project',
+      alias: p.alias || '',
       //patentNumber: p.patentId || String(p._id || '').split('_')[1] || 'N/A',
       patentNumber: p.patentId || (p._id ? String(p._id).split('_').pop() : 'N/A'),
       status: getStatusShorthand(p.status),
@@ -242,17 +426,23 @@ export default function DashboardPage() {
       progress: calculatePatentOverlapScore(p.infringements || []),
       infringementAnalysisStatus: p.infringement_analysis_status || 'unknown',
       hasUpdates,
+      last_viewed: p.last_viewed,
+      last_updated: p.last_updated,
+      folders: p.folders || p.folder_ids || [],
     };
   });
 
-  console.log('📊 Raw patent fields:', patents.patents[0]);
-  console.log('📋 All statuses:', mappedPatents.map(p => ({ title: p.title, status: p.status, id: p.patentNumber })));
+  console.log('📊 Raw patent fields:', patents.patents);
   
+  console.log('📋 All statuses:', mappedPatents.map(p => ({ title: p.title, status: p.status, id: p.patentNumber, updates: p.hasUpdates, last_viewed: p.last_viewed, last_updated: p.last_updated })));
+  
+  const folderBuckets = bucketCasesByFolder(mappedPatents, folders)
+  const folderFilteredPatents = folderBuckets[activeFolderId] || []
 
   const localHighRiskMatches = mappedPatents.filter(p => p.isHighRisk).length;
   const highRiskMatchesValue = patents.stats.highRiskMatches || localHighRiskMatches;
 
-  const statusFilteredPatents = (() => {
+  /*const statusFilteredPatents = (() => {
     if (!statusFilter || statusFilter === 'all') return mappedPatents;
     if (statusFilter === 'highRiskMatches') {
       return mappedPatents.filter(p => p.isHighRisk);
@@ -260,7 +450,17 @@ export default function DashboardPage() {
     const allowed = STAT_STATUS_MAP[statusFilter];
     if (!allowed || allowed === 'all') return mappedPatents;
     return mappedPatents.filter(p => allowed.includes(p.status));
-  })();
+  })();*/
+
+  const statusFilteredPatents = (() => {
+      if (!statusFilter || statusFilter === 'all') return folderFilteredPatents;
+      if (statusFilter === 'highRiskMatches') {
+        return folderFilteredPatents.filter(p => p.isHighRisk);
+      }
+      const allowed = STAT_STATUS_MAP[statusFilter];
+      if (!allowed || allowed === 'all') return folderFilteredPatents;
+      return folderFilteredPatents.filter(p => allowed.includes(p.status));
+   })();
 
   const filteredPatents = searchQuery.trim()
     ? statusFilteredPatents.filter(p =>
@@ -272,9 +472,24 @@ export default function DashboardPage() {
   const activePatents = patents.patents.filter(p =>
     ['patented', 'active'].includes(getStatusShorthand(p.status))
   );
+  
   const closedPatents = patents.patents.filter(p =>
     ['expired', 'abandoned'].includes(getStatusShorthand(p.status))
   );
+  console.log('Active patents count:', activePatents.length);
+  console.log('Closed patents count:', closedPatents.length);
+
+  // Replace the global-based counts with folder-scoped ones
+  const scopedActive = folderFilteredPatents.filter(p =>
+    ['patented', 'active'].includes(p.status)
+  ).length;
+
+  const scopedCleared = folderFilteredPatents.filter(p =>
+    ['complete', 'cleared', 'expired', 'abandoned'].includes(p.status)
+  ).length;
+
+  const scopedHighRisk = folderFilteredPatents.filter(p => p.isHighRisk).length;
+
 
   const sectionTitle = (() => {
     if (searchQuery.trim()) return `Results for "${searchQuery}"`;
@@ -292,10 +507,11 @@ export default function DashboardPage() {
 
   // Navigate to patent detail when clicking a notification row
   const handleNotificationPatentClick = (patent) => {
-    navigate('/patent-detail', {
+    navigate(`/patent-detail?id=${patent.id}`, {
       state: {
         id: patent.id,
         title: patent.title,
+        alias: patent.alias,
         patentNumber: patent.patentNumber,
         status: patent.status,
         updatedAt: patent.updatedAt,
@@ -317,6 +533,8 @@ export default function DashboardPage() {
         onItemClick={setActiveItem}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        activeFolderId={activeFolderId}
+        onSelectFolder={setActiveFolderId}
       />
 
       <main className="dash-main">
@@ -442,11 +660,16 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ── Stats ── */}
+          {/* ── Stats ── */
+          console.log('📊 Stats:', patents.stats)
+          
+        
+          }
           <div className="stats-grid">
             <StatCard
               title="Active Scans"
-              value={ui.loading ? '—' : (patents.stats.activeScans || activePatents.length)}
+              //value={ui.loading ? '—' : (patents.stats.activeScans || activePatents.length)}
+              value={ui.loading ? '—' : scopedActive}
               subtitle="This week"
               icon={<Search size={18} />}
               color="blue"
@@ -455,7 +678,9 @@ export default function DashboardPage() {
             />
             <StatCard
               title="Patents Analyzed"
-              value={ui.loading ? '—' : (patents.stats.patentsAnalyzed || patents.patents.length)}
+             // value={ui.loading ? '—' : (patents.stats.patentsAnalyzed || patents.patents.length)}
+              //value={ui.loading ? '—' : (patents.patents.length)}
+              value={ui.loading ? '—' : folderFilteredPatents.length}
               subtitle="Total"
               icon={<FileText size={18} />}
               color="purple"
@@ -464,17 +689,23 @@ export default function DashboardPage() {
             />
             <StatCard
               title="High Risk Matches"
-              value={ui.loading ? '—' : highRiskMatchesValue}
+              //value={ui.loading ? '—' : highRiskMatchesValue}
+              value={ui.loading ? '—' : scopedHighRisk}
               subtitle="Requires attention"
               icon={<AlertTriangle size={18} />}
               color="yellow"
               onClick={() => handleStatCardClick('highRiskMatches')}
               isActive={statusFilter === 'highRiskMatches'}
             />
+            
             <StatCard
               title="Cleared Patents"
-              value={ui.loading ? '—' : (patents.stats.clearedPatents || closedPatents.length)}
-              subtitle="No infringement"
+              //value={ui.loading ? '—' : (closedPatents.length)}
+              value={ui.loading ? '—' : scopedCleared}
+             // value={ui.loading ? '—' : (patents.stats.clearedPatents || closedPatents.length)}
+              //value={ui.loading ? '—' : (closedPatents.length)}
+              //subtitle="No infringement"
+              subtitle="Cleared / Expired / Abandoned"
               icon={<CheckCircle size={18} />}
               color="green"
               onClick={() => handleStatCardClick('clearedPatents')}
@@ -514,6 +745,13 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
+
+          <FolderTabsBar
+            folders={folders}
+            activeFolderId={activeFolderId}
+            onSelectFolder={setActiveFolderId}
+            counts={folderBuckets}
+          />
 
           {/* ── Loading state ── */}
           {ui.loading && (
@@ -558,8 +796,19 @@ export default function DashboardPage() {
             </div>
           )}
 
+
+
+         <FetchBar
+            fetchingIds={fetchingIds}
+            errorIds={errorIds}
+            initialCount={initialFetchCount}
+          />
+                      
+
+
           {/* ── Patent Cards Grid ── */}
           {!ui.loading && filteredPatents.length > 0 && (
+            
             <>
               <div className="patents-grid">
                 {filteredPatents.map((patent, index) => (
@@ -568,7 +817,13 @@ export default function DashboardPage() {
                     className="animate-fadeInUp"
                     style={{ animationDelay: `${0.5 + index * 0.1}s`, opacity: 0 }}
                   >
-                   <ProjectCard {...patent} riskLevel={patent.riskLevel} hasUpdates={patent.hasUpdates} />
+                    
+                   <ProjectCard {...patent} 
+                      currentFolderIds={patent.folders}
+                      riskLevel={patent.riskLevel} 
+                      hasUpdates={patent.hasUpdates} 
+                      folders={folders}
+                      onMoveToFolder={handleMoveToFolder} />
                   </div>
                 ))}
               </div>
@@ -585,6 +840,8 @@ export default function DashboardPage() {
               )}
             </>
           )}
+
+         
 
           {/* ── Weekly Search Section ── */}
           {!searchQuery.trim() && (!statusFilter || statusFilter === 'all') && (
@@ -637,6 +894,14 @@ export default function DashboardPage() {
       </main>
 
       <style>{`
+              @keyframes spinLoader {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
         @keyframes spin {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }

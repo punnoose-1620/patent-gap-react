@@ -22,6 +22,7 @@ export const useUser = () => {
         } else {
         console.warn('⚠️ Profile is null — backend may not recognize the session');
         }
+        return profile;
     } catch (error) {
       console.error('Failed to load user profile:', error);
       dispatch(setUserError(error.message || 'Failed to load profile'));

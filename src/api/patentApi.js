@@ -4,6 +4,10 @@
 
 import axiosInstance from './axiosConfig';
 
+// ── Constants ───────────────────────────────────────────────
+const TIMEOUT_MS = 5 * 60 * 1000; // 2 minutes
+
+
 // ── Shared error normaliser ──────────────────────────────────
 const apiError = (error, fallback) => {
   const msg =
@@ -15,6 +19,47 @@ const apiError = (error, fallback) => {
   err.request  = error?.request  || null;
   throw err;
 };
+
+const fetchWithTimeout = (promise, ms = TIMEOUT_MS) => {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request timed out')), ms)
+  );
+  return Promise.race([promise, timeout]);
+};
+
+/** Flat API chart_data rows → map keyed by parent claim index for the Claims Chart UI. */
+export const normalizeChartRowsToMap = (rows, parentClaims = []) => {
+  const chart = {};
+  if (!Array.isArray(rows) || rows.length === 0) return chart;
+
+  const refOrder = [];
+  const keyForRef = (ref) => {
+    const r = (ref || '').trim();
+    if (parentClaims.length) {
+      const idx = parentClaims.findIndex(
+        (c) => typeof c === 'string' && (c === ref || c.trim() === r)
+      );
+      if (idx >= 0) return String(idx + 1);
+    }
+    let i = refOrder.indexOf(r);
+    if (i < 0) {
+      refOrder.push(r);
+      i = refOrder.length - 1;
+    }
+    return String(i + 1);
+  };
+
+  rows.forEach((row) => {
+    const key = keyForRef(row.ref_claim);
+    if (!chart[key]) chart[key] = [];
+    chart[key].push({
+      entry_id: row.entry_id || (row.infringing_claim || row.claim || '').slice(0, 32) || '-',
+      similarity_score: row.calculated_similarity_score || row.similarity_score || 0,
+    });
+  });
+  return chart;
+};
+
 
 export const patentApi = {
 
@@ -30,7 +75,7 @@ export const patentApi = {
     }
   },
 
-  getMyCases: async (page = 1) => {
+  /*getMyCases: async (page = 1) => {
     try {
 
       const { data } = await axiosInstance.get('/my-cases', { params: { page } });
@@ -48,9 +93,25 @@ export const patentApi = {
       
       apiError(error, 'Failed to fetch cases');
     }
-  },
+  },*/
 
-  getCaseById: async (caseId) => {
+  getMyCases: async (page = 1) => {
+  try {
+    const { data } = await fetchWithTimeout(
+      axiosInstance.get('/my-cases', { params: { page } }),
+      TIMEOUT_MS
+    );
+    return {
+      items: data.items || [],
+      pagination: data.pagination || {},
+    };
+  } catch (error) {
+    console.error('❌ getMyCases error:', error.message);
+    apiError(error, 'Failed to fetch cases');
+  }
+},
+
+  /*getCaseById: async (caseId) => {
     try {
       console.log('📤 Fetching case with ID:', caseId);
       const { data } = await axiosInstance.get(`/cases/${caseId}`);
@@ -58,26 +119,76 @@ export const patentApi = {
     } catch (error) {
       apiError(error, 'Failed to fetch case');
     }
-  },
+  },*/
 
-  getInfringementChart: async (caseId) => {
+  getCaseById: async (caseId) => {
+  try {
+    const { data } = await fetchWithTimeout(
+      axiosInstance.get(`/cases/${caseId}`),
+      TIMEOUT_MS  // 2 minutes
+    );
+    return data.case;
+  } catch (error) {
+    if (error.message === 'Request timed out') {
+      console.warn('⏱️ getCaseById timed out');
+      return null; // ← return null instead of throwing
+    }
+    apiError(error, 'Failed to fetch case');
+  }
+},
+  
+
+  /*getInfringementChart: async (caseId, parentClaims = []) => {
     try {
       const { data } = await axiosInstance.get(`/infringement-chart/${caseId}`);
       console.log('📊 Infringement chart data received:', data);
-      return data.infringement_chart || null;
+      const raw = data.chart_data || data.infringement_chart || null;
+      if (raw == null) return null;
+      if (Array.isArray(raw)) return normalizeChartRowsToMap(raw, parentClaims);
+      return typeof raw === 'object' ? raw : null;
+    } catch (error) {
+      apiError(error, 'Failed to fetch infringement chart');
+    }
+  },*/
+
+  getInfringementChart: async (caseId, parentClaims = []) => {
+    try {
+      const { data } = await fetchWithTimeout(
+        axiosInstance.get(`/infringement-chart/${caseId}`),
+        TIMEOUT_MS
+      );
+      console.log('📊 Infringement chart data received:', data);
+      const raw = data.chart_data || data.infringement_chart || null;
+      if (raw == null) return null;
+      if (Array.isArray(raw)) return normalizeChartRowsToMap(raw, parentClaims);
+      return typeof raw === 'object' ? raw : null;
     } catch (error) {
       apiError(error, 'Failed to fetch infringement chart');
     }
   },
 
-  getStats: async (userId) => {
+
+  /*getStats: async (userId) => {
     try {
       const { data } = await axiosInstance.get(`/stats?user_id=${userId}`);
       return data;
     } catch (error) {
       apiError(error, 'Failed to fetch stats');
     }
-  },
+  },*/
+
+  getStats: async (userId) => {
+  try {
+    const { data } = await fetchWithTimeout(
+      axiosInstance.get(`/stats?user_id=${userId}`),
+      TIMEOUT_MS
+    );
+    return data;
+  } catch (error) {
+    apiError(error, 'Failed to fetch stats');
+  }
+},
+
 
   fetchFromUspto: async (patentNumber) => {
     try {
@@ -143,6 +254,22 @@ export const patentApi = {
     throw error;
   }
 },*/
+
+
+
+batchUploadFile: async (formData) => {
+  try {
+    const { data } = await axiosInstance.post(
+      '/bulk-fetch',           // receives one file per request
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return data;
+  } catch (error) {
+    console.warn('Batch file upload failed:', error.message);
+    throw error;
+  }
+},
 
   triggerSimilarityAnalysis: async (caseId, keywords) => {
     try {
