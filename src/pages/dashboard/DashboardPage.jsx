@@ -689,8 +689,8 @@ export default function DashboardPage() {
             />
             <StatCard
               title="High Risk Matches"
-              //value={ui.loading ? '—' : highRiskMatchesValue}
-              value={ui.loading ? '—' : scopedHighRisk}
+              value={ui.loading ? '—' : highRiskMatchesValue}
+              //value={ui.loading ? '—' : scopedHighRisk}
               subtitle="Requires attention"
               icon={<AlertTriangle size={18} />}
               color="yellow"
