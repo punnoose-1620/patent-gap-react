@@ -438,7 +438,8 @@ export default function DashboardPage() {
   
   const folderBuckets = bucketCasesByFolder(mappedPatents, folders)
   const folderFilteredPatents = folderBuckets[activeFolderId] || []
-
+  console.log('Folder-filtered patents:', folderFilteredPatents);
+  
   const localHighRiskMatches = mappedPatents.filter(p => p.isHighRisk).length;
   const highRiskMatchesValue = patents.stats.highRiskMatches || localHighRiskMatches;
 
@@ -689,8 +690,8 @@ export default function DashboardPage() {
             />
             <StatCard
               title="High Risk Matches"
-              value={ui.loading ? '—' : highRiskMatchesValue}
-              //value={ui.loading ? '—' : scopedHighRisk}
+              //value={ui.loading ? '—' : highRiskMatchesValue}
+              value={ui.loading ? '—' : scopedHighRisk}
               subtitle="Requires attention"
               icon={<AlertTriangle size={18} />}
               color="yellow"
