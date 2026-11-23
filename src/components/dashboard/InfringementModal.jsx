@@ -969,7 +969,7 @@ if (isProduct) {
                                 {row.similarClaim ? (
                                   <>
                                     <p style={{ margin:'0 0 7px' }}>{row.similarClaim}</p>
-                                    {row.urlToClaim && (
+                                    {/*row.urlToClaim && (
                                       <a
                                         href={row.urlToClaim}
                                         target="_blank"
@@ -978,7 +978,7 @@ if (isProduct) {
                                       >
                                         View source →
                                       </a>
-                                    )}
+                                    )*/}
                                   </>
                                 ) : (
                                   <span style={{ color:'var(--ink3)', fontSize:12 }}>No similar claim found</span>
