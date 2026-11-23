@@ -674,8 +674,8 @@ export default function DashboardPage() {
           <div className="stats-grid">
             <StatCard
               title="Active Scans"
-              //value={ui.loading ? '—' : (patents.stats.activeScans || activePatents.length)}
-              value={ui.loading ? '—' : scopedActive}
+              value={ui.loading ? '—' : (patents.stats.activeScans || activePatents.length)}
+             // value={ui.loading ? '—' : scopedActive}
               subtitle="This week"
               icon={<Search size={18} />}
               color="blue"
