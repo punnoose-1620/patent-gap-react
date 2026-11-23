@@ -439,6 +439,11 @@ export default function DashboardPage() {
   const folderBuckets = bucketCasesByFolder(mappedPatents, folders)
   const folderFilteredPatents = folderBuckets[activeFolderId] || []
   console.log('Folder-filtered patents:', folderFilteredPatents);
+
+  console.log(
+  'Folder-filtered patents Title and High Risk Status:',
+  folderFilteredPatents.map(({ title, isHighRisk }) => ({ title, isHighRisk }))
+);
   
   const localHighRiskMatches = mappedPatents.filter(p => p.isHighRisk).length;
   const highRiskMatchesValue = patents.stats.highRiskMatches || localHighRiskMatches;
