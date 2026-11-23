@@ -687,8 +687,8 @@ export default function DashboardPage() {
               title="Patents Analyzed"
              // value={ui.loading ? '—' : (patents.stats.patentsAnalyzed || patents.patents.length)}
               //value={ui.loading ? '—' : (patents.patents.length)}
-             // value={ui.loading ? '—' : folderFilteredPatents.length}
-              value={ui.loading ? '—' : (patents.stats.patentsAnalyzed )}
+             value={ui.loading ? '—' : folderFilteredPatents.length}
+             // value={ui.loading ? '—' : (patents.stats.patentsAnalyzed )}
               subtitle="Total"
               icon={<FileText size={18} />}
               color="purple"
