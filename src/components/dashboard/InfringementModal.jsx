@@ -965,7 +965,7 @@ if (isProduct) {
                                 </span>
                               </td>
                               <td>{row.yourClaim}</td>
-                              <td>
+                             {/*} <td>
                                 {row.similarClaim ? (
                                   <>
                                     <p style={{ margin:'0 0 7px' }}>{row.similarClaim}</p>
@@ -983,7 +983,7 @@ if (isProduct) {
                                 ) : (
                                   <span style={{ color:'var(--ink3)', fontSize:12 }}>No similar claim found</span>
                                 )}
-                              </td>
+                              </td>*/}
                               <td>
                                 {row.similarityScore !== null ? (
                                   <span className={`_im_sc ${cls}`}>
