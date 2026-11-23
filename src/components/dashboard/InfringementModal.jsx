@@ -965,25 +965,25 @@ if (isProduct) {
                                 </span>
                               </td>
                               <td>{row.yourClaim}</td>
-                             {/*} <td>
+                             <td>
                                 {row.similarClaim ? (
                                   <>
                                     <p style={{ margin:'0 0 7px' }}>{row.similarClaim}</p>
                                     {row.urlToClaim && (
-                                      <a
+                                      {/*<a
                                         href={row.urlToClaim}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         style={{ fontSize:11, color:'var(--accent)', display:'inline-flex', alignItems:'center', gap:3, fontFamily:"'Inconsolata',monospace", textDecoration:'none' }}
                                       >
                                         View source →
-                                      </a>
+                                      </a>*/}
                                     )}
                                   </>
                                 ) : (
                                   <span style={{ color:'var(--ink3)', fontSize:12 }}>No similar claim found</span>
                                 )}
-                              </td>*/}
+                              </td>
                               <td>
                                 {row.similarityScore !== null ? (
                                   <span className={`_im_sc ${cls}`}>
