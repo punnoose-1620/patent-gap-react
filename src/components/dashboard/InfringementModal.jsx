@@ -970,14 +970,14 @@ if (isProduct) {
                                   <>
                                     <p style={{ margin:'0 0 7px' }}>{row.similarClaim}</p>
                                     {row.urlToClaim && (
-                                      {/*<a
+                                      <a
                                         href={row.urlToClaim}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         style={{ fontSize:11, color:'var(--accent)', display:'inline-flex', alignItems:'center', gap:3, fontFamily:"'Inconsolata',monospace", textDecoration:'none' }}
                                       >
                                         View source →
-                                      </a>*/}
+                                      </a>
                                     )}
                                   </>
                                 ) : (
