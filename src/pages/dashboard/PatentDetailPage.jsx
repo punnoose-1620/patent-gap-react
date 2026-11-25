@@ -723,6 +723,12 @@ const PatentDetailPage = () => {
   const fileInputRef   = useRef();
 
   const [sourceInfoOpen, setSourceInfoOpen] = useState(false);
+
+  // ── Export case popup ──
+  const [exportOpen,  setExportOpen]  = useState(false);
+  const [exportKind,  setExportKind]  = useState('product');
+  const [exporting,   setExporting]   = useState(false);
+  const [exportError, setExportError] = useState(null);
   
   const { patents } = useStore();
 
