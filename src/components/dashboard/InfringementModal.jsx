@@ -175,13 +175,17 @@ const InfringementModal = ({
   infringementId,
   onClose,
 }) => {
-  if (!match) return null;
+  
 
   const [caseData,     setCaseData]     = useState(null);
   const [normInfData,  setNormInfData]  = useState(null);
   const [sameAsPatent, setSameAsPatent] = useState(false);
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState(null);
+
+  const [exporting,   setExporting]   = useState(false);
+  const [exportError, setExportError] = useState(null);
+
   const PATENT_CLAIMS_PREVIEW_COUNT = 3; // how many claims show before "View all"
 
   
@@ -240,6 +244,8 @@ const InfringementModal = ({
     fetchData();
   }, [caseId, infringementId]);
 
+  if (!match) return null;
+
   // ── Derived display values ──
   const isProduct  = normInfData ? normInfData.type === 'product' : match.type === 'product';
   const isNested   = normInfData?._isNestedCase || false;
@@ -268,6 +274,42 @@ const InfringementModal = ({
 
   //Patent claims (for patent-type infringements)
   const matchedPatentClaimsList = getDisplayClaimsList(normInfData?.claims || match.claims);
+
+
+    const handleExport = async () => {
+    if (!caseId || !infringementId || exporting) return;
+
+    setExporting(true);
+    setExportError(null);
+
+    try {
+      const kind = isProduct ? 'product' : 'patent';
+      const { blob, filename } = await patentApi.exportSingleInfringementReport(
+        caseId,
+        infringementId,
+        kind
+      );
+
+      const ext = blob.type.includes('pdf') ? 'pdf'
+                : blob.type.includes('wordprocessingml') ? 'docx'
+                : 'pdf'; // change the default to match your backend
+      const fallbackName = `infringement-report_${caseLabel}_${entryId}.${ext}`;
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = filename || fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+    } catch (err) {
+      console.error('Export failed:', err);
+      setExportError(err?.message || 'Failed to export report');
+    } finally {
+      setExporting(false);
+    }
+  };
 
 
   // ── Build claim chart rows ──
@@ -524,6 +566,17 @@ if (isProduct) {
           -webkit-tap-highlight-color: transparent;
         }
         ._im_btnexp:hover{background:#256427;transform:translateY(-1px);box-shadow:0 4px 16px rgba(46,125,50,0.28)}
+        ._im_btnexp[disabled] {
+          opacity:0.6; cursor:not-allowed; transform:none; box-shadow:none;
+        }
+        ._im_btn_spin {
+          width:13px; height:13px; border-radius:50%;
+          border:2px solid rgba(255,255,255,0.4);
+          border-top-color:#fff;
+          animation:_im_spin 0.8s linear infinite;
+        }
+        ._im_ft_right { display:flex; align-items:center; gap:12px; }
+        ._im_exp_err  { font-size:12px; color:var(--red); max-width:260px; line-height:1.4; }
         ._im_tbl{width:100%;border-collapse:collapse}
         ._im_tbl th{
           padding:10px 14px; text-align:left;
@@ -630,6 +683,8 @@ if (isProduct) {
           ._im_tbl td   { font-size:12px; padding:10px 10px; }
           ._im_overlap_score { font-size:18px !important; }
           ._im_visit    { width:100%; justify-content:center; padding:10px 18px; box-sizing:border-box; }
+          ._im_ft_right { flex:1; }
+          ._im_ft_right ._im_btnexp { flex:1; }
         }
 
         /* ════ SMALL MOBILE ════ */
@@ -648,6 +703,8 @@ if (isProduct) {
           ._im_overlap_score{ font-size:16px !important; }
           ._im_tbl th { padding:7px 8px; font-size:8.5px; }
           ._im_tbl td { padding:9px 8px; font-size:11.5px; }
+          ._im_ft_right { width:100%; flex-direction:column; align-items:stretch; }
+          ._im_exp_err  { max-width:none; }
         }
 
         /* ════ TINY ════ */
@@ -1021,13 +1078,30 @@ if (isProduct) {
           )}
         </div>
 
-        {/* ── FOOTER ── */}
+               {/* ── FOOTER ── */}
         <div className="_im_ft">
           <button className="_im_btnclose" onClick={onClose}>Close</button>
-          <button className="_im_btnexp">
-            <Download size={14} />
-            Export Report
-          </button>
+
+          <div className="_im_ft_right">
+            {exportError && <span className="_im_exp_err">{exportError}</span>}
+            <button
+              className="_im_btnexp"
+              onClick={handleExport}
+              disabled={exporting || loading || !caseId || !infringementId}
+            >
+              {exporting ? (
+                <>
+                  <span className="_im_btn_spin" />
+                  Exporting…
+                </>
+              ) : (
+                <>
+                  <Download size={14} />
+                  Export Report
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </>
