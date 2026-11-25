@@ -410,6 +410,41 @@ batchUploadFile: async (formData) => {
     }
   },
 
+    exportAllInfringementsReport: async (caseId, kind) => {
+    try {
+      const response = await axiosInstance.get(
+        `/report/all-infringements/${encodeURIComponent(caseId)}`,
+        {
+          params: { kind },            // 'product' | 'patent'
+          responseType: 'blob',
+          timeout: TIMEOUT_MS,
+        }
+      );
+
+      const disposition = response.headers?.['content-disposition'] || '';
+      const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+      const filename = m ? decodeURIComponent(m[1]) : null;
+
+      return { blob: response.data, filename };
+    } catch (error) {
+      // With responseType 'blob', error bodies are Blobs too, so parse them
+      let msg = null;
+      const errBlob = error?.response?.data;
+      if (errBlob instanceof Blob) {
+        try {
+          const parsed = JSON.parse(await errBlob.text());
+          msg = parsed?.message || parsed?.detail || null;
+        } catch { /* not JSON */ }
+      }
+      if (msg) {
+        const err = new Error(msg);
+        err.response = error.response;
+        throw err;
+      }
+      apiError(error, 'Failed to export report');
+    }
+  },
+
   proxyDocument: async (documentUrl) => {
     try {
       const { body } = { document_url: documentUrl }

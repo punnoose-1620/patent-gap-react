@@ -577,6 +577,129 @@ const SourceInfoModal = ({ matches, onClose }) => {
   );
 };
 
+const ExportKindModal = ({ kind, onKindChange, counts, exporting, error, onExport, onClose }) => {
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape' && !exporting) onClose(); };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose, exporting]);
+
+  const options = [
+    { key: 'patent',  icon: '📄', label: 'Patent Report',  desc: 'Infringing patents found for this case', count: counts.patent  },
+    { key: 'product', icon: '🛒', label: 'Product Report', desc: 'Infringing products found for this case', count: counts.product },
+  ];
+
+  return (
+    <div
+      ref={wrapRef}
+      onClick={(e) => { if (e.target === wrapRef.current && !exporting) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 110,
+        background: 'rgba(20,20,18,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Export report"
+        style={{
+          background: 'var(--surf)', borderRadius: 12, width: '100%', maxWidth: 460,
+          boxShadow: '0 12px 40px rgba(0,0,0,0.25)', overflow: 'hidden',
+        }}
+      >
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--rule2)' }}>
+          <div style={{
+            fontFamily: "'Inconsolata', monospace", fontSize: 10,
+            textTransform: 'uppercase', letterSpacing: '0.10em', color: 'var(--ink3)', marginBottom: 2,
+          }}>
+            Export Case
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>
+            Which report do you want to export?
+          </div>
+        </div>
+
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {options.map(opt => {
+            const selected = kind === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                disabled={exporting}
+                onClick={() => onKindChange(opt.key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                  padding: '12px 14px', borderRadius: 10, cursor: exporting ? 'not-allowed' : 'pointer',
+                  background: selected ? 'var(--acc-soft)' : 'var(--bg, #fff)',
+                  border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--rule2)'}`,
+                  transition: 'background 0.15s, border-color 0.15s',
+                }}
+              >
+                <span style={{ fontSize: 22 }}>{opt.icon}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>
+                    {opt.label}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--ink3)', marginTop: 2 }}>
+                    {opt.desc}
+                  </span>
+                </span>
+                <span style={{
+                  fontFamily: "'Inconsolata', monospace", fontSize: 11, fontWeight: 700,
+                  color: selected ? 'var(--accent)' : 'var(--ink3)',
+                  background: selected ? 'var(--surf)' : 'var(--surf2)',
+                  padding: '2px 8px', borderRadius: 99,
+                }}>
+                  {opt.count}
+                </span>
+                <span style={{
+                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${selected ? 'var(--accent)' : 'var(--ink3)'}`,
+                  background: selected ? 'radial-gradient(var(--accent) 45%, transparent 50%)' : 'transparent',
+                }} />
+              </button>
+            );
+          })}
+
+          {error && (
+            <div style={{
+              background: 'var(--red-soft)', border: '1px solid rgba(185,28,28,0.20)',
+              borderRadius: 8, padding: '9px 12px', fontSize: 12.5, color: 'var(--red)',
+            }}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          display: 'flex', justifyContent: 'flex-end', gap: 10,
+          padding: '12px 20px', borderTop: '1px solid var(--rule2)',
+        }}>
+          <button className="btn-export" onClick={onClose} disabled={exporting}>
+            Cancel
+          </button>
+          <button
+            className="btn-new"
+            onClick={onExport}
+            disabled={exporting || !kind}
+            style={{ opacity: exporting ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            {exporting ? (
+              <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Exporting…</>
+            ) : (
+              <><Download size={13} /> Export PDF</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 
 const PatentDetailPage = () => {
@@ -1348,7 +1471,38 @@ useEffect(() => {
     }
   };
 
-  const exportCase = () => alert(`Exporting case for ${title}`);
+    // Opens the popup; preselects whichever tab the user is currently viewing
+  const exportCase = () => {
+    setExportError(null);
+    setExportKind(matchTypeFilter);
+    setExportOpen(true);
+  };
+
+  const handleExportConfirm = async () => {
+    if (!caseId || !exportKind || exporting) return;
+    setExporting(true);
+    setExportError(null);
+
+    try {
+      const { blob, filename } = await patentApi.exportAllInfringementsReport(caseId, exportKind);
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || `${exportKind}-infringement-report_${patentNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+
+      setExportOpen(false);
+    } catch (err) {
+      console.error('Export case failed:', err);
+      setExportError(err?.message || 'Failed to export report');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const deleteCase = async () => {
     if (!window.confirm('Are you sure you want to delete this case? This action cannot be undone.')) return;
@@ -2730,6 +2884,21 @@ useEffect(() => {
         <SourceInfoModal
           matches={potentialMatches}
           onClose={() => setSourceInfoOpen(false)}
+        />
+      )}
+
+            {exportOpen && (
+        <ExportKindModal
+          kind={exportKind}
+          onKindChange={setExportKind}
+          counts={{
+            product: potentialMatches.filter(m => m.type === 'product').length,
+            patent:  potentialMatches.filter(m => m.type === 'patent').length,
+          }}
+          exporting={exporting}
+          error={exportError}
+          onExport={handleExportConfirm}
+          onClose={() => setExportOpen(false)}
         />
       )}
 
