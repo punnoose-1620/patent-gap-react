@@ -623,7 +623,7 @@ export default function DashboardPage() {
               <div className="alert-body">
                 {ui.error
                   ? <><strong>Error:</strong> {ui.error}</>
-                  : <><strong>{highRiskMatchesValue} HIGH risk findings</strong> require attorney review — potential infringement detected.</>
+                  : <><strong>{scopedHighRisk} HIGH risk findings</strong> require attorney review — potential infringement detected.</>
                 }
               </div>
               <button className="alert-close" onClick={() => setAlertDismissed(true)}>×</button>
