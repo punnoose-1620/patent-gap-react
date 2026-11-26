@@ -999,7 +999,7 @@ if (isProduct) {
                         <th style={{ width:68 }}>Claim #</th>
                         {/* Column header adapts to format */}
                         <th style={{ width:'30%' }}>
-                          {isNested ? 'Reference Claim' : isProduct ? 'Market Language Claim' : 'Your Patent Claim'}
+                          {isNested ? 'Reference Claim' : isProduct ? 'Reference Claim' : 'Your Patent Claim'}
                         </th>
                         <th>
                           {isNested ? 'Matched Claim' : 'Similar Infringing Claim'}
